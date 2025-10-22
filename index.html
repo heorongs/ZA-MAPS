@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <title>ZA 한글 공략 맵 </title>
+  <title>ZA 한글 공략 맵</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -956,23 +956,37 @@
     function openReports(){
       $rmodal.style.display='flex';
       if (unsubReports){unsubReports();unsubReports=null;}
+
       const qR = query(collectionGroup(db,'reports'), where('status','==','pending'));
-      // 신고목록 구독부 openReports() 안에서: 스냅샷 처리 로직 교체
-      unsubReports = onSnapshot(qR, snap=>{
-        const now = nowMs();
-        const items = [];
-        snap.forEach(d=>{
-          const r = d.data();
-          const created = toMs(r.createdAt);
-          // createdAt이 아직 없으면(=null) 일단 포함시킴
-          const within48h = created ? (now - created) <= HIDE_MS : true;
-          if (!within48h) return;
-          items.push({ id:d.id, path:d.ref.path, createdAt: created, ...r });
-        });
-        // 최신순 정렬(서버시간 들어오면 자동으로 순서 안정화)
-        items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-        renderReportList(items);
-      });
+
+      unsubReports = onSnapshot(
+        qR,
+        snap=>{
+          const now = nowMs();
+          const items = [];
+          snap.forEach(d=>{
+            const r = d.data();
+            const created = toMs(r.createdAt);
+            const within48h = created ? (now - created) <= HIDE_MS : true;
+            if (!within48h) return;
+            items.push({ id:d.id, path:d.ref.path, createdAt: created, ...r });
+          });
+          items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+          renderReportList(items);
+        },
+        err=>{
+          console.error('[reports] onSnapshot error:', err);
+          // 인덱스/규칙 문제를 화면에 바로 안내
+          $rlist.innerHTML = `
+            <div style="background:#291; padding:10px; border-radius:8px">
+              신고목록을 불러오지 못했습니다.<br>
+              <div style="margin-top:6px; font-size:12px; opacity:.8">
+                • Firestore 규칙에 <code>match /{path=**}/reports/{rid}</code> 읽기 권한(관리자)을 추가했는지 확인<br>
+                • 컬렉션 그룹 인덱스(reports, status[, createdAt])를 생성했는지 확인
+              </div>
+            </div>`;
+        }
+      );
     }
     function pathInfo(rep){
       const seg = rep.path.split('/');
@@ -1018,13 +1032,14 @@
         btn.onclick = async ()=>{
           const r = list[+btn.getAttribute('data-reject')];
           const inf = pathInfo(r);
-          await updateDoc(doc(db, ...inf.path.split('/')), { status:'rejected' });
+          // 경로 문자열 그대로 사용 (segment 분해 불필요)
+          await updateDoc(doc(db, inf.path), { status:'rejected' });
           await recomputeHiddenUntil(inf.markerId);
           alert('신고를 반려했습니다. (필요시 자동 노출)');
         };
       });
+
     }
-    
 
     // 추가: 통합 검색 매칭 (제목/본문 + 포켓몬 태그)
     function matchText(m){
@@ -1042,4 +1057,4 @@
 </body>
 </html>
 
-
+    
