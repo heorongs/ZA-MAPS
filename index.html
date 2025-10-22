@@ -957,12 +957,21 @@
       $rmodal.style.display='flex';
       if (unsubReports){unsubReports();unsubReports=null;}
       const qR = query(collectionGroup(db,'reports'), where('status','==','pending'));
+      // 신고목록 구독부 openReports() 안에서: 스냅샷 처리 로직 교체
       unsubReports = onSnapshot(qR, snap=>{
-        const items = []; snap.forEach(d=> items.push({ id:d.id, path:d.ref.path, ...d.data() }));
         const now = nowMs();
-        const list = items.filter(r => (now - toMs(r.createdAt)) <= HIDE_MS)
-                          .sort((a,b)=> toMs(b.createdAt) - toMs(a.createdAt)).reverse();
-        renderReportList(list);
+        const items = [];
+        snap.forEach(d=>{
+          const r = d.data();
+          const created = toMs(r.createdAt);
+          // createdAt이 아직 없으면(=null) 일단 포함시킴
+          const within48h = created ? (now - created) <= HIDE_MS : true;
+          if (!within48h) return;
+          items.push({ id:d.id, path:d.ref.path, createdAt: created, ...r });
+        });
+        // 최신순 정렬(서버시간 들어오면 자동으로 순서 안정화)
+        items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+        renderReportList(items);
       });
     }
     function pathInfo(rep){
@@ -1015,6 +1024,14 @@
         };
       });
     }
+    function toMs(t){
+      if (!t) return null;
+      if (t.toMillis) return t.toMillis();
+      if (t.seconds)  return t.seconds*1000;
+      if (typeof t === 'number') return t;
+      const d = new Date(t); return isNaN(d) ? null : d.getTime();
+    }
+
     // 추가: 통합 검색 매칭 (제목/본문 + 포켓몬 태그)
     function matchText(m){
       if (!textFilter) return true;
