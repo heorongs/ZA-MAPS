@@ -945,7 +945,10 @@
       side.style.display = (m==='search') ? 'block':'none';
     }
     btnSearch.onclick=()=> setMode('search');
-    btnPlace.onclick =()=> setMode('place');
+    btnPlace.onclick =()=> {
+      const msg = '핀 배치모드에서 배치하게 된 핀은 심사를 거쳐 모두에게 공개됩니다.\n신중히, 사실만을 작성하여 주세요.\n\n핀 배치모드로 전환하시겠습니까?';
+      if (confirm(msg)) setMode('place');
+    };
     setMode('search'); // 기본 검색모드
 
     /* ---------------- 입력/저장 ---------------- */
@@ -1159,4 +1162,5 @@
   </script>
 </body>
 </html>
+
 
