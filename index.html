@@ -259,7 +259,7 @@
     // Wild 전용 pane
     map.createPane('wildPane');
     map.getPane('wildPane').style.zIndex = 450;
-    map.getPane('wildPane').style.pointerEvents = 'none';
+    map.getPane('wildPane').style.pointerEvents = 'none'; // 이미지 클릭 비활성(지도 클릭은 통과)
 
     // 와일드 존 오버레이(필요시 추가)
     const WILD_ZONES = [ /* { url:'wild/a.png', bounds:[[y1,x1],[y2,x2]], opacity:0.65 } */ ];
@@ -268,7 +268,7 @@
     function buildWildOverlays(){
       wildLayer.clearLayers();
       for (const z of WILD_ZONES){
-        L.imageOverlay(z.url, z.bounds, { opacity:z.opacity ?? 0.7, pane:'wildPane' }).addTo(wildLayer);
+        L.imageOverlay(z.url, z.bounds, { opacity:z.opacity ?? 0.7, pane:'wildPane', interactive:false }).addTo(wildLayer);
       }
     }
     buildWildOverlays();
@@ -370,6 +370,14 @@
       return def ? `icons/${def}` : `icons/default.png`;
     };
 
+    /* ---------------- 로그인/관리자 상태 ---------------- */
+    const $who = document.getElementById('who');
+    const $login = document.getElementById('login');        // ❗ 선언을 먼저
+    const $logout = document.getElementById('logout');
+    const $adminBadge = document.getElementById('adminBadge');
+    const $btnReports = document.getElementById('btnReports');
+    let me=null, isAdmin=false;
+
     // ---- 인앱 브라우저(웹뷰) 감지 & 우회 도우미 ----
     function isInAppBrowser() {
       const ua = navigator.userAgent || '';
@@ -383,13 +391,11 @@
       if (lc.includes('wv;') || lc.includes('version/4.0 chrome/')) return true;
       return false;
     }
-
     function openExternally() {
       const url = location.href;
       const isAndroid = /android/i.test(navigator.userAgent);
       const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-
-     if (isAndroid) {
+      if (isAndroid) {
         const intent = `intent://${location.host}${location.pathname}${location.search}${location.hash}` +
                        `#Intent;scheme=https;package=com.android.chrome;end`;
         location.href = intent;
@@ -399,20 +405,17 @@
         window.open(url, '_blank', 'noopener');
       }
     }
-
     function showInAppBlocker() {
       const div = document.createElement('div');
-      div.style.cssText = `
-        position:fixed; inset:0; z-index:3000; background:#000b; display:flex; align-items:center; justify-content:center;
-      `;
+      div.style.cssText = `position:fixed; inset:0; z-index:3000; background:#000b; display:flex; align-items:center; justify-content:center;`;
       div.innerHTML = `
         <div style="background:#1e1e1e; color:#fff; padding:16px; border-radius:12px; width:min(420px,90%);">
-         <div style="font-weight:700; font-size:16px; margin-bottom:10px">외부 브라우저에서 열어 로그인해주세요</div>
-         <div style="opacity:.85; line-height:1.5; font-size:14px">
-           이 앱 내 브라우저(웹뷰)에선 Google 로그인이 차단됩니다.<br>
+          <div style="font-weight:700; font-size:16px; margin-bottom:10px">외부 브라우저에서 열어 로그인해주세요</div>
+          <div style="opacity:.85; line-height:1.5; font-size:14px">
+            이 앱 내 브라우저(웹뷰)에선 Google 로그인이 차단됩니다.<br>
             • Android: 아래 버튼으로 Chrome에서 열기<br>
-           • iOS: 우측 상단 메뉴 → <b>“Safari에서 열기”</b> 선택
-         </div>
+            • iOS: 우측 상단 메뉴 → <b>“Safari에서 열기”</b> 선택
+          </div>
           <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap">
             <button id="iabOpen" style="background:#3d6cff;border:0;color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer">외부 브라우저로 열기</button>
             <button id="iabCopy" style="background:#2a2a2a;border:0;color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer">주소 복사</button>
@@ -421,7 +424,6 @@
           </div>
         </div>`;
       document.body.appendChild(div);
-
       div.querySelector('#iabOpen').onclick = openExternally;
       div.querySelector('#iabCopy').onclick = async () => {
         try { await navigator.clipboard.writeText(location.href); alert('주소를 복사했어요. 외부 브라우저에서 붙여넣기 해주세요.'); }
@@ -434,7 +436,7 @@
       div.querySelector('#iabClose').onclick = () => div.remove();
     }
 
-    // 변경: 로그인 버튼 클릭 전 인앱 검사 후 우회 안내
+    // ✅ 로그인 버튼 핸들러: 선언 이후 1회만 등록
     $login.onclick = async (e) => {
       if (isInAppBrowser()) {
         e?.preventDefault();
@@ -445,19 +447,9 @@
       try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
       catch{ await signInWithRedirect(auth, new GoogleAuthProvider()); }
     };
-
-    /* ---------------- 로그인 ---------------- */
-    const $who=document.getElementById('who'), $login=document.getElementById('login'), $logout=document.getElementById('logout'), $adminBadge=document.getElementById('adminBadge');
-    const $btnReports=document.getElementById('btnReports');
-    let me=null, isAdmin=false;
-
-    $login.onclick=async()=>{
-      if (!firebaseOk) { alert('네트워크 차단으로 로그인 불가'); return; }
-      try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
-      catch{ await signInWithRedirect(auth, new GoogleAuthProvider()); }
-    };
-    $logout.onclick=()=>{ if(firebaseOk) signOut(auth); };
+    $logout.onclick = ()=>{ if(firebaseOk) signOut(auth); };
     if (firebaseOk) getRedirectResult(auth).catch(()=>{});
+
     let unsubAdmin=null;
     function resubscribe(){ subscribeMarkers(); }
 
@@ -545,7 +537,7 @@
     /* ---------------- 통합 검색(제목/본문) + 랭킹 ---------------- */
     const qInput   = document.getElementById('qInput');
     const qSearch  = document.getElementById('qSearch');
-    const qClear   = document.getElementById('qClear');
+       const qClear   = document.getElementById('qClear');
     const qTrendEl = document.getElementById('qTrending');
 
     let textFilter = ''; // lowercased
@@ -563,12 +555,12 @@
     }
     async function logQuery(q){
       if (!firebaseOk) return;
-      const norm = fieldKey(q);
+      const normed = fieldKey(q);
       const refD = doc(db,'searchDaily', dateKey());
       await setDoc(refD, {
         updatedAt: serverTimestamp(),
-        [`counts.${norm}`]: increment(1),
-        [`labels.${norm}`]: q
+        [`counts.${normed}`]: increment(1),
+        [`labels.${normed}`]: q
       }, { merge:true });
     }
     function lastNDaysKeys(n){
@@ -585,9 +577,9 @@
         if (!s.exists()) continue;
         const data = s.data();
         const cs = data?.counts || {}; const ls = data?.labels || {};
-        for (const [norm, c] of Object.entries(cs)){
-          counts.set(norm, (counts.get(norm)||0) + (c||0));
-          if (ls[norm]) labels.set(norm, ls[norm]);
+        for (const [normKey, c] of Object.entries(cs)){
+          counts.set(normKey, (counts.get(normKey)||0) + (c||0));
+          if (ls[normKey]) labels.set(normKey, ls[normKey]);
         }
       }
       const tops = [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n])=> labels.get(n) || n);
@@ -660,9 +652,8 @@
       const txtOk = matchText(m);
       const ok = catOn && !hiddenForUser && txtOk;
       if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
-     else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
+      else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
     }
-
 
     // 48시간 경과 자동 복귀(1분마다 재평가)
     setInterval(()=> markerMap.forEach((_, id)=> applyVisibility(id)), 60*1000);
@@ -1052,7 +1043,6 @@
         },
         err=>{
           console.error('[reports] onSnapshot error:', err);
-          // 인덱스/규칙 문제를 화면에 바로 안내
           $rlist.innerHTML = `
             <div style="background:#291; padding:10px; border-radius:8px">
               신고목록을 불러오지 못했습니다.<br>
@@ -1108,8 +1098,8 @@
         btn.onclick = async ()=>{
           const r = list[+btn.getAttribute('data-reject')];
           const inf = pathInfo(r);
-          // 경로 문자열 그대로 사용 (segment 분해 불필요)
-          await updateDoc(doc(db, inf.path), { status:'rejected' });
+          // ❗ 경로 문자열을 세그먼트로 분리해 전달
+          await updateDoc(doc(db, ...inf.path.split('/')), { status:'rejected' });
           await recomputeHiddenUntil(inf.markerId);
           alert('신고를 반려했습니다. (필요시 자동 노출)');
         };
@@ -1120,18 +1110,13 @@
     // 추가: 통합 검색 매칭 (제목/본문 + 포켓몬 태그)
     function matchText(m){
       if (!textFilter) return true;
-     const q = textFilter;
-     // 제목/본문
+      const q = textFilter;
       const base = norm(`${m.title||''} ${m.body||''}`);
       if (base.includes(q)) return true;
-     // 포켓몬 태그(있다면 포함 검색)
-     const qn = normName(q);
+      const qn = normName(q);
       if (Array.isArray(m.pokemonNorm) && m.pokemonNorm.some(p => p.includes(qn))) return true;
       return false;
     }
   </script>
 </body>
 </html>
-
-    
-
