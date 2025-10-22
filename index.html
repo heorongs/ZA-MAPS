@@ -121,7 +121,7 @@
 
     <div class="hr"></div>
     <h3>특수 레이어</h3>
-    <div class="flt-wrap">
+        <div class="flt-wrap">
       <button id="fltWild" class="flt on">와일드 존</button>
       <button id="fltAll" class="flt">전체 선택</button>
       <button id="fltNone" class="flt">전체 해제</button>
@@ -259,7 +259,7 @@
     // Wild 전용 pane
     map.createPane('wildPane');
     map.getPane('wildPane').style.zIndex = 450;
-    map.getPane('wildPane').style.pointerEvents = 'none'; // 이미지 클릭 비활성(지도 클릭은 통과)
+    map.getPane('wildPane').style.pointerEvents = 'none';
 
     // 와일드 존 오버레이(필요시 추가)
     const WILD_ZONES = [ /* { url:'wild/a.png', bounds:[[y1,x1],[y2,x2]], opacity:0.65 } */ ];
@@ -268,7 +268,7 @@
     function buildWildOverlays(){
       wildLayer.clearLayers();
       for (const z of WILD_ZONES){
-        L.imageOverlay(z.url, z.bounds, { opacity:z.opacity ?? 0.7, pane:'wildPane', interactive:false }).addTo(wildLayer);
+        L.imageOverlay(z.url, z.bounds, { opacity:z.opacity ?? 0.7, pane:'wildPane' }).addTo(wildLayer);
       }
     }
     buildWildOverlays();
@@ -372,13 +372,13 @@
 
     /* ---------------- 로그인/관리자 상태 ---------------- */
     const $who = document.getElementById('who');
-    const $login = document.getElementById('login');        // ❗ 선언을 먼저
+    const $login = document.getElementById('login');
     const $logout = document.getElementById('logout');
     const $adminBadge = document.getElementById('adminBadge');
     const $btnReports = document.getElementById('btnReports');
     let me=null, isAdmin=false;
 
-    // ---- 인앱 브라우저(웹뷰) 감지 & 우회 도우미 ----
+    // 인앱 감지/안내
     function isInAppBrowser() {
       const ua = navigator.userAgent || '';
       const lc = ua.toLowerCase();
@@ -436,13 +436,8 @@
       div.querySelector('#iabClose').onclick = () => div.remove();
     }
 
-    // ✅ 로그인 버튼 핸들러: 선언 이후 1회만 등록
     $login.onclick = async (e) => {
-      if (isInAppBrowser()) {
-        e?.preventDefault();
-        showInAppBlocker();
-        return;
-      }
+      if (isInAppBrowser()) { e?.preventDefault(); showInAppBlocker(); return; }
       if (!firebaseOk) { alert('네트워크 차단으로 로그인 불가'); return; }
       try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
       catch{ await signInWithRedirect(auth, new GoogleAuthProvider()); }
@@ -507,6 +502,7 @@
       const btn = document.querySelector(`.flt[data-cat="${CSS.escape(key)}"]`);
       if (btn){ btn.classList.toggle('on', visible); }
       markerMap.forEach((_, id)=> applyVisibility(id));
+      recomputeSeqs(); // 카테고리 토글 시 번호 재산출
     }
     function setAllCats(v){ CATEGORIES.forEach(c=> setCategoryVisible(c.key, v)); }
     function setWildVisible(v){
@@ -537,15 +533,16 @@
     /* ---------------- 통합 검색(제목/본문) + 랭킹 ---------------- */
     const qInput   = document.getElementById('qInput');
     const qSearch  = document.getElementById('qSearch');
-       const qClear   = document.getElementById('qClear');
+    const qClear   = document.getElementById('qClear');
     const qTrendEl = document.getElementById('qTrending');
 
     let textFilter = ''; // lowercased
     function applyTextFilter(q){
       textFilter = norm(q||'');
       markerMap.forEach((_, id)=> applyVisibility(id));
+      recomputeSeqs(); // 검색어 변경 시 번호 재산출
     }
-    qSearch.onclick = ()=> { const q = qInput.value.trim(); if (q){ applyTextFilter(q); logQuery(q).catch(()=>{});} };
+    qSearch.onclick = ()=> { const q = qInput.value.trim(); applyTextFilter(q); if (q) logQuery(q).catch(()=>{}); };
     qInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ qSearch.click(); }});
     qClear.onclick = ()=>{ qInput.value=''; applyTextFilter(''); };
 
@@ -592,7 +589,7 @@
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
     /* ---------------- 마커 구독/렌더 ---------------- */
-    const markerMap=new Map(); // id -> {group, marker, data}
+    const markerMap=new Map(); // id -> {group, marker, data, seq}
     let unsubMain=null, unsubPending=null;
 
     function subscribeMarkers(){
@@ -602,15 +599,24 @@
       markerMap.clear();
 
       const qApproved=query(collection(db,'markers'), where('status','==','approved'));
-      unsubMain=onSnapshot(qApproved, s=>s.docChanges().forEach(renderChange));
+      unsubMain=onSnapshot(qApproved, s=>{
+        s.docChanges().forEach(renderChange);
+        recomputeSeqs(); // 승인 목록 바뀔 때마다 재계산
+      });
 
       if (isAdmin){
         try{
           const qPending=query(collection(db,'markers'), where('status','==','pending'), orderBy('createdAt','desc'));
-          unsubPending=onSnapshot(qPending, s=>s.docChanges().forEach(renderChange));
+          unsubPending=onSnapshot(qPending, s=>{
+            s.docChanges().forEach(renderChange);
+            recomputeSeqs(); // 관리자 보기는 대기건도 포함하므로 반영
+          });
         }catch{
           const qPending=query(collection(db,'markers'), where('status','==','pending'));
-          unsubPending=onSnapshot(qPending, s=>s.docChanges().forEach(renderChange));
+          unsubPending=onSnapshot(qPending, s=>{
+            s.docChanges().forEach(renderChange);
+            recomputeSeqs();
+          });
         }
       }
     }
@@ -623,7 +629,6 @@
         return;
       }
       const m={id, ...ch.doc.data()};
-      // 보정: pokemonNorm이 없으면 계산
       if (Array.isArray(m.pokemon) && !Array.isArray(m.pokemonNorm)){
         m.pokemonNorm = m.pokemon.map(normName);
       }
@@ -635,10 +640,9 @@
       }
       const group = ensureCatGroup(m.category);
       const mk=L.marker([m.y, m.x], { icon: iconFor(m.category) }).addTo(group);
-      mk.on('click', ()=>openInfo(m));
-      markerMap.set(id, {group, marker: mk, data:m});
+      mk.on('click', ()=>openInfoWithSeq(m)); // ← 번호가 재계산되므로 별도 함수를 통해 표시
+      markerMap.set(id, {group, marker: mk, data:m, seq:null});
       applyVisibility(id);
-      if (currentOpenId===id) openInfo(m);
     }
 
     function isHiddenByReport(m){ return toMs(m.hiddenUntil) > nowMs(); }
@@ -648,15 +652,15 @@
       if (!rec) return;
       const {group, marker, data:m} = rec;
       const catOn = catVisible.get(m.category) !== false;
-      const hiddenForUser = isHiddenByReport(m) && !isAdmin; // 숨김이면 관리자만 보이게
+      const hiddenForUser = isHiddenByReport(m) && !isAdmin;
       const txtOk = matchText(m);
-      const ok = catOn && !hiddenForUser && txtOk;
+      const ok = catOn && !hiddenForUser && txtOk && (isAdmin || m.status==='approved');
       if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
       else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
     }
 
     // 48시간 경과 자동 복귀(1분마다 재평가)
-    setInterval(()=> markerMap.forEach((_, id)=> applyVisibility(id)), 60*1000);
+    setInterval(()=> { markerMap.forEach((_, id)=> applyVisibility(id)); recomputeSeqs(); }, 60*1000);
 
     async function reportMarker(m, reason){
       if (!firebaseOk) return;
@@ -665,7 +669,7 @@
       const until = new Date(Date.now() + HIDE_MS);
       await updateDoc(doc(db,'markers', m.id), { hiddenUntil: until });
       const rec = markerMap.get(m.id);
-      if (rec){ rec.data.hiddenUntil = until; applyVisibility(m.id); }
+      if (rec){ rec.data.hiddenUntil = until; applyVisibility(m.id); recomputeSeqs(); }
     }
 
     async function recomputeHiddenUntil(markerId){
@@ -683,7 +687,47 @@
       const refm = doc(db,'markers', markerId);
       await updateDoc(refm, { hiddenUntil: (maxUntil>now)? new Date(maxUntil) : null });
       const rec = markerMap.get(markerId);
-      if (rec){ rec.data.hiddenUntil = (maxUntil>now)? new Date(maxUntil) : null; applyVisibility(markerId); }
+      if (rec){ rec.data.hiddenUntil = (maxUntil>now)? new Date(maxUntil) : null; applyVisibility(markerId); recomputeSeqs(); }
+    }
+
+    /* ---------- 동적 시퀀스(고유번호) 재계산 ----------
+       규칙:
+       - 화면에 '사용자에게 보이는' 마커만 기준
+         (관리자는 pending도 포함 / 일반 유저는 approved만)
+       - createdAt 오름차순으로 1,2,3… 재부여
+       - 검색/카테고리/숨김/신고에 의해 가시성 변경되면 즉시 갱신
+    --------------------------------------------------- */
+    function visibleForSeq(m){
+      if (!m) return false;
+      if (isHiddenByReport(m)) return false;
+      if (catVisible.get(m.category) === false) return false;
+      if (!matchText(m)) return false;
+      if (!isAdmin && m.status!=='approved') return false;
+      return true;
+    }
+
+    function recomputeSeqs(){
+      // 수집
+      const items = [];
+      markerMap.forEach(({data}, id)=>{
+        if (visibleForSeq(data)){
+          const created = toMs(data.createdAt) ?? 0;
+          items.push({ id, created });
+        }
+      });
+      // 오래된 순으로 정렬 → 1부터
+      items.sort((a,b)=> (a.created||0) - (b.created||0));
+      const seqById = new Map();
+      for (let i=0;i<items.length;i++) seqById.set(items[i].id, i+1);
+
+      // 저장 및 열린 패널 갱신
+      markerMap.forEach((rec, id)=>{ rec.seq = seqById.get(id) ?? null; });
+      if (currentOpenId && markerMap.has(currentOpenId)){
+        // 패널 상단 번호만 갱신
+        const rec = markerMap.get(currentOpenId);
+        const $infoId = document.getElementById('infoId');
+        $infoId.textContent = rec.seq ? '#'+rec.seq : '#-';
+      }
     }
 
     /* ---------------- 상세 패널 + 캐러셀 + 댓글 ---------------- */
@@ -795,15 +839,22 @@
         : `<img class="thumb" src="${first.url}" alt="thumb">`;
     }
 
-    function openInfo(m){
+    function openInfoWithSeq(m){
+      // 항상 최신 재계산된 seq 사용
+      const rec = markerMap.get(m.id);
+      const seqNum = rec?.seq ?? null;
+      openInfo(m, seqNum);
+    }
+
+    function openInfo(m, seqNum){
       currentOpenId=m.id;
       $infoTitle.textContent=m.title||'(제목 없음)';
-      $infoId.textContent = '#'+(m.seq ?? '-');
-      $infoMeta.textContent = `${labelFor(m.category)} · by ${m.displayName||'익명'} · ${m.status||'pending'}`;
+      $infoId.textContent = seqNum ? '#'+seqNum : '#-';
+      const statusText = m.status || 'pending';
+      $infoMeta.textContent = `${labelFor(m.category)} · by ${m.displayName||'익명'} · ${statusText}`;
       $infoMediaTop.innerHTML = mediaTopEl(m);
       $infoBody.textContent = m.body||'';
 
-      // 포켓몬 태그(와일드/우두머리/메가)
       const pkCats = ['와일드 존','우두머리 포켓몬','메가 포켓몬'];
       if (pkCats.includes(m.category) && Array.isArray(m.pokemon) && m.pokemon.length){
         $infoPk.style.display='flex';
@@ -967,17 +1018,7 @@
         }
         const thumbUrl = media[0].url;
 
-        setBtn('고유 번호 발급 중…');
-        const seqRef = doc(db,'meta','seq');
-        const seqNum = await runTransaction(db, async (tx)=>{
-          const snap=await tx.get(seqRef);
-          const cur = snap.exists()? (snap.data().marker||0) : 0;
-          const next = cur + 1;
-          if (!snap.exists()) tx.set(seqRef, { marker: next });
-          else tx.update(seqRef, { marker: next });
-          return next;
-        });
-
+        // ❌ meta/seq 사용 제거
         setBtn('저장 중…');
         const inPkCat = pokemonCats.includes(catSel.value);
         await addDoc(collection(db,'markers'), {
@@ -985,7 +1026,6 @@
           title: t.value, body: b.value,
           category: catSel.value,
           media, thumbUrl,
-          seq: seqNum,
           displayName, authorUid: me.uid,
           createdAt: serverTimestamp(),
           status: 'pending',
@@ -1085,7 +1125,7 @@
           const rec = markerMap.get(inf.markerId);
           if (rec){
             map.setView([rec.data.y, rec.data.x], Math.max(0, map.getZoom()));
-            openInfo(rec.data);
+            openInfoWithSeq(rec.data);
             if (inf.type==='comment' && document.getElementById('c-'+inf.commentId)){
               document.getElementById('c-'+inf.commentId).scrollIntoView({behavior:'smooth', block:'center'});
             }
@@ -1098,7 +1138,6 @@
         btn.onclick = async ()=>{
           const r = list[+btn.getAttribute('data-reject')];
           const inf = pathInfo(r);
-          // ❗ 경로 문자열을 세그먼트로 분리해 전달
           await updateDoc(doc(db, ...inf.path.split('/')), { status:'rejected' });
           await recomputeHiddenUntil(inf.markerId);
           alert('신고를 반려했습니다. (필요시 자동 노출)');
@@ -1107,7 +1146,7 @@
 
     }
 
-    // 추가: 통합 검색 매칭 (제목/본문 + 포켓몬 태그)
+    // 통합 검색 매칭 (제목/본문 + 포켓몬 태그)
     function matchText(m){
       if (!textFilter) return true;
       const q = textFilter;
@@ -1120,3 +1159,4 @@
   </script>
 </body>
 </html>
+
