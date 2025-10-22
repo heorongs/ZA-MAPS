@@ -237,11 +237,11 @@
     const nowMs = ()=> Date.now();
     const HIDE_MS = 48 * 3600 * 1000;
     const toMs = (t)=>{
-      if (!t) return 0;
+      if (!t) return null;
       if (t.toMillis) return t.toMillis();
       if (t.seconds)  return t.seconds*1000;
       if (typeof t === 'number') return t;
-      const d=new Date(t); return d.getTime();
+      const d = new Date(t); return isNaN(d) ? null : d.getTime();
     };
     const norm = s => (s||'').toLowerCase();
     const normName = s => (s||'').trim().toLowerCase();
@@ -1024,13 +1024,7 @@
         };
       });
     }
-    function toMs(t){
-      if (!t) return null;
-      if (t.toMillis) return t.toMillis();
-      if (t.seconds)  return t.seconds*1000;
-      if (typeof t === 'number') return t;
-      const d = new Date(t); return isNaN(d) ? null : d.getTime();
-    }
+    
 
     // 추가: 통합 검색 매칭 (제목/본문 + 포켓몬 태그)
     function matchText(m){
@@ -1047,3 +1041,4 @@
   </script>
 </body>
 </html>
+
