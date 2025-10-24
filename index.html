@@ -17,7 +17,6 @@
     #adminBadge{display:none;background:#ffd54f;color:#111;padding:2px 6px;border-radius:8px}
     .tbtn{background:#2a2f3a;color:#ddd;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
     .tbtn.on{background:#3d6cff;color:#fff}
-    /* 좌측 검색 사이드 */
     #side{
       position:fixed; z-index:1300; left:10px; top:60px; bottom:10px;
       width:20vw; min-width:240px; max-width:420px;
@@ -34,8 +33,6 @@
     .hr{height:1px; background:#2a3040; margin:12px 0}
     .inp{width:100%; box-sizing:border-box; background:#1117; color:#eef; border:1px solid #303645; border-radius:10px; padding:8px}
     .row{display:flex; gap:8px; align-items:center}
-
-    /* 신고 관리 모드 전용 리스트 */
     .rlist{display:grid; gap:8px}
     .ritem{background:#1f2430;border:1px solid #2f3647;border-radius:10px;padding:10px}
     .ritem .meta{font-size:12px;color:#9fb0c0;margin-top:4px}
@@ -46,8 +43,6 @@
     .rep-sort .flt{padding:4px 10px}
     .rep-filt{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}
     .rep-filt .flt{padding:3px 10px}
-
-    /* 우하단 상세 패널 */
     #info{position:fixed; right:10px; bottom:10px; width:420px; max-height:75%;
       overflow:auto; z-index:1500; display:none; background:#1e1e1e; color:#ddd;
       border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.35);}
@@ -65,7 +60,6 @@
     #info .idtag{background:#263238; color:#cfd8dc; padding:2px 6px; border-radius:6px; font-size:11px}
     .pk-tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
     .pk-tags .tag{background:#223; border:1px solid #345; color:#cfe; padding:2px 8px; border-radius:999px; font-size:12px; cursor:pointer}
-    /* 캐러셀 */
     .carousel{ position:relative; width:100%; margin-top:12px; background:#141414; border-radius:10px; overflow:hidden }
     .carousel .inner{ display:flex; transition: transform .3s ease }
     .carousel .item{ min-width:100%; display:flex; align-items:center; justify-content:center; background:#000 }
@@ -79,7 +73,6 @@
     .carousel .dots{ position:absolute; left:0; right:0; bottom:6px; display:flex; justify-content:center; gap:6px }
     .carousel .dot{ width:8px; height:8px; border-radius:50%; background:#6a6a6a; }
     .carousel .dot.on{ background:#fff }
-    /* 댓글 */
     #comments{ margin-top:12px; }
     #comments .cform textarea{ width:100%; box-sizing:border-box; background:#111; color:#eee; border:1px solid #333; border-radius:8px; padding:8px }
     #comments .cform .row{ display:flex; gap:8px; margin-top:8px }
@@ -92,8 +85,6 @@
     .citem .btn.warn{ background:#ff5252 }
     .badge-report{background:#ff9800;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
     .badge-hidden{background:#90caf9;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
-
-    /* 입력 모달 */
     #modal{display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;}
     #panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px}
     #panel input,#panel textarea,#panel select{width:100%; box-sizing:border-box}
@@ -101,7 +92,6 @@
   </style>
 </head>
 <body>
-  <!-- 외부 스크립트 차단 경고 -->
   <div id="blockWarn" style="display:none;position:fixed;inset:0;background:#000a;z-index:3000;
   align-items:center;justify-content:center;color:#fff;padding:20px;text-align:center">
     외부 스크립트가 차단되어 페이지가 작동하지 않습니다.<br>
@@ -120,7 +110,6 @@
     <button id="btnAdminReport" class="tbtn" style="display:none">신고 관리 모드</button>
   </div>
 
-  <!-- 좌측 사이드 -->
   <aside id="side">
     <div id="sideCats">
       <h3>카테고리 필터</h3>
@@ -135,7 +124,6 @@
       </div>
     </div>
 
-    <!-- 신고 관리 모드 -->
     <div id="sideReports" style="display:none">
       <h3>신고된 댓글</h3>
       <div class="rep-sort" id="repSortBar">
@@ -167,7 +155,6 @@
 
   <div id="map"></div>
 
-  <!-- 우하단 상세 패널 -->
   <aside id="info">
     <header>
       <h3 id="infoTitle">(제목)</h3>
@@ -187,7 +174,6 @@
         <div class="dots" id="carDots"></div>
       </div>
 
-      <!-- 댓글 -->
       <div id="comments">
         <div class="cform" id="cForm" style="display:none">
           <textarea id="cBody" rows="3" placeholder="댓글을 입력하세요"></textarea>
@@ -200,7 +186,6 @@
     </div>
   </aside>
 
-  <!-- 마커 입력 모달 -->
   <div id="modal">
     <div id="panel">
       <h3>마커 추가 (검수 대기)</h3>
@@ -221,7 +206,6 @@
       <select id="mCat" class="inp"></select>
       <small class="muted">카테고리 아이콘은 Firestore <code>categories/{카테고리키}.iconUrl</code>로 전역 변경</small>
 
-      <!-- 포켓몬 지정 -->
       <div id="pkEditor" style="display:none; margin-top:10px">
         <label>포켓몬(여러 개 가능)</label>
         <div class="row" style="align-items:stretch">
@@ -245,14 +229,13 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module">
-    /* ---------------- 유틸 ---------------- */
     if (!globalThis.CSS) globalThis.CSS = {};
     if (!CSS.escape) CSS.escape = s => String(s).replace(/["'\\\s]/g, m => '\\' + m);
     const esc = (s)=> (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const nowMs = ()=> Date.now();
     const HIDE_MS = 48 * 3600 * 1000;
-    const HIDE_DELAY_MS = 2 * 3600 * 1000; // 2시간
-    const HIDE_COUNT = 5;                   // 5회
+    const HIDE_DELAY_MS = 2 * 3600 * 1000;
+    const HIDE_COUNT = 5;
     const toMs = (t)=>{
       if (!t) return null;
       if (t.toMillis) return t.toMillis();
@@ -264,7 +247,6 @@
     const normName = s => (s||'').trim().toLowerCase();
     const fieldKey = s => normName(s).replace(/[.#$/\[\]\/]/g,'_');
 
-    /* ---------------- Leaflet ---------------- */
     const IMG_URL = "za_world_map_clean_fixed.png";
     const IMG_W = 2048, IMG_H = 2048;
     const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 4 });
@@ -282,7 +264,6 @@
     let showPendingOnly = false;
     let adminReportMode = false;
 
-    /* ---------------- Firebase ---------------- */
     let firebaseOk = true;
     let app, auth, db, st;
     let GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged;
@@ -315,10 +296,9 @@
       ({ ref, getDownloadURL, uploadBytesResumable, uploadBytes } = stMod);
     } catch (e) {
       firebaseOk = false;
-      console.warn("[Firebase] 동적 import 실패 — 오프라인 모드", e);
+      console.warn("[Firebase] import 실패 — 오프라인 모드", e);
     }
 
-    /* ---------------- 업로드 유틸 ---------------- */
     const safeName = (name)=> name.normalize('NFKD').replace(/[^\w.\-]+/g,'_').replace(/_+/g,'_').slice(-80);
     globalThis.uploadSmart = async function uploadSmart(file, folder, onProgress, label='업로드'){
       if (!firebaseOk) throw new Error('Firebase unavailable');
@@ -342,7 +322,6 @@
       return await getDownloadURL(r);
     };
 
-    /* ---------------- 카테고리 ---------------- */
     const CATEGORIES = [
       {key:'홀로베이터',     label:'홀로베이터',     defaultIcon:'holovator.png'},
       {key:'와일드 존',       label:'와일드 존',       defaultIcon:'wild_zone.png'},
@@ -385,7 +364,6 @@
       return def ? `icons/${def}` : `icons/default.png`;
     };
 
-    /* ---------------- 로그인/관리자 상태 ---------------- */
     const $who = document.getElementById('who');
     const $login = document.getElementById('login');
     const $logout = document.getElementById('logout');
@@ -435,7 +413,6 @@
       });
     }
 
-    /* ---------------- 아이콘 캐시 ---------------- */
     const iconCache = new Map();
     function iconUrlForCat(cat){ return categoryIconOverride.get(cat) || defaultIconFor(cat); }
     function iconFor(cat){
@@ -445,7 +422,6 @@
       return iconCache.get(key);
     }
 
-    /* ---------------- 카테고리 그룹 & 토글 ---------------- */
     const catGroups = new Map();
     const catVisible = new Map();
     function ensureCatGroup(key){
@@ -477,7 +453,6 @@
       document.getElementById('fltWild').classList.toggle('on', v);
     }
 
-    // 좌측 필터 UI
     const side = document.getElementById('side');
     const sideCats = document.getElementById('sideCats');
     const sideReports = document.getElementById('sideReports');
@@ -536,11 +511,9 @@
       document.getElementById('btnAdminReport').classList.toggle('on', adminReportMode);
       applyAllVisibility();
       recomputeSeqs();
-      // ✅ 모드 전환 직후 즉시 렌더링
-      renderReportedComments();
+      renderReportedComments(); // ★ FIX: 모드 전환 즉시 그리기
     }
 
-    /* ---------------- 통합 검색 ---------------- */
     const qInput   = document.getElementById('qInput');
     const qSearch  = document.getElementById('qSearch');
     const qClear   = document.getElementById('qClear');
@@ -598,8 +571,7 @@
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
-    /* ---------------- 신고: 정책/프록시 ---------------- */
-    let reportedComments = []; // 관리자 패널 표시용
+    let reportedComments = [];
     let unsubRepComments = null;
 
     const msToHuman = (ms)=>{
@@ -671,47 +643,77 @@
       }
     }
 
-    // 관리자용 프록시: adminReports 컬렉션 구독 추가
+    // ===== 신고 목록 구독 (콜렉션그룹 + 폴백) =====
+
+    let fallbackActive = false;
+    const fallbackUnsubs = new Map(); // markerId -> () => void
+
+    function clearFallbackSubs(){
+      fallbackUnsubs.forEach(unsub => { try{unsub();}catch{} });
+      fallbackUnsubs.clear();
+    }
+
     async function subscribeReportedCommentsAdmin(){
       if (unsubRepComments){unsubRepComments();unsubRepComments=null;}
+      clearFallbackSubs();
+      reportedComments = []; renderReportedComments();
+
       if (!firebaseOk || !isAdmin){
-        reportedComments = [];
-        renderReportedComments(); // ✅ 즉시 반영
         return;
       }
 
       const stops = [];
 
+      // 콜렉션그룹 구독을 안전하게 시도하고, 실패하면 폴백
+      const tryAdd = (fn) => {
+        try {
+          const stop = fn();
+          stops.push(stop);
+          return true;
+        } catch (e) {
+          console.warn('[rep-list] group subscribe failed, fallback will be used', e);
+          return false;
+        }
+      };
+
+      let groupOk = true;
+
       // 1) 댓글의 reportPendingCount > 0
-      stops.push(onSnapshot(query(collectionGroup(db,'comments'), where('reportPendingCount','>',0)),
+      groupOk = tryAdd(()=> onSnapshot(
+        query(collectionGroup(db,'comments'), where('reportPendingCount','>',0)),
         (snap)=> ingestCommentGroupSnap(snap),
-        (err)=> console.warn('[rep-list count]', err)
-      ));
+        (err)=> { console.warn('[rep-list count]', err); }
+      )) && groupOk;
 
       // 2) 숨김 상태 기준
-      stops.push(onSnapshot(query(collectionGroup(db,'comments'), where('hiddenUntil','>', new Date())),
+      groupOk = tryAdd(()=> onSnapshot(
+        query(collectionGroup(db,'comments'), where('hiddenUntil','>', new Date())),
         (snap)=> ingestCommentGroupSnap(snap),
-        (err)=> console.warn('[rep-list hidden]', err)
-      ));
+        (err)=> { console.warn('[rep-list hidden]', err); }
+      )) && groupOk;
 
-      // 3) 보류 report 기준 (구버전 호환: reports.pending)
-      stops.push(onSnapshot(query(collectionGroup(db,'reports'), where('status','==','pending')),
+      // 3) 보류 report 기준 (댓글용 reports만 집계)
+      groupOk = tryAdd(()=> onSnapshot(
+        query(collectionGroup(db,'reports'), where('status','==','pending')),
         async (snap)=>{
           const tasks = [];
           snap.forEach(d=>{
-            const parentCommentRef = d.ref.parent.parent; // .../comments/{cid}
-            if (!parentCommentRef) return;
-            tasks.push(getDoc(parentCommentRef));
+            const parent = d.ref.parent.parent; // .../(comments/{cid}|markers/{mid})
+            if (!parent) return;
+            // ★ FIX: 댓글의 reports만 대상으로 (마커 신고 제외)
+            if (parent.id && parent.parent && parent.parent.id === 'comments') {
+              tasks.push(getDoc(parent));
+            }
           });
           const parents = await Promise.all(tasks);
           const fakeSnap = { forEach: (fn)=> parents.forEach(ps=> { if(ps && ps.exists()) fn(ps); }) };
           ingestCommentGroupSnap(fakeSnap);
         },
-        (err)=> console.warn('[rep-list reports]', err)
-      ));
+        (err)=> { console.warn('[rep-list reports]', err); }
+      )) && groupOk;
 
       // 4) 관리자 프록시 컬렉션 직접 구독
-      stops.push(onSnapshot(collection(db,'adminReports'), snap=>{
+      groupOk = tryAdd(()=> onSnapshot(collection(db,'adminReports'), snap=>{
         const now = nowMs();
         const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
         snap.forEach(d=>{
@@ -735,15 +737,72 @@
         });
         reportedComments = [...idx.values()].sort(sortReported);
         renderReportedComments();
-      }, err=> console.warn('[adminReports]', err)));
+      }, err=> console.warn('[adminReports]', err))) && groupOk;
 
-      unsubRepComments = ()=> stops.forEach(s=> s());
+      unsubRepComments = ()=> stops.forEach(s=> { try{s();}catch{} });
 
-      // ✅ 구독 직후에도 현재 상태를 즉시 그리기
-      renderReportedComments();
+      // === 폴백: 콜렉션그룹이 권한/인덱스로 막히면, 마커별로 서브컬렉션을 직접 구독 ===
+      if (!groupOk) {
+        console.warn('[rep-list] Fallback mode ON');
+        fallbackActive = true;
+
+        // 승인/대기 마커만 대상으로(부하 제한)
+        const q1 = query(collection(db,'markers'), where('status','==','approved'));
+        const q2 = query(collection(db,'markers'), where('status','==','pending'));
+
+        const attachMarker = (snap)=>{
+          snap.docChanges().forEach(ch=>{
+            const mid = ch.doc.id;
+            if (ch.type==='removed'){
+              const u = fallbackUnsubs.get(mid);
+              if (u){ try{u();}catch{} fallbackUnsubs.delete(mid); }
+              return;
+            }
+            // 댓글에서 reportPendingCount>0 또는 hiddenUntil>now
+            const now = new Date();
+            const stopA = onSnapshot(
+              query(collection(db,'markers', mid, 'comments'), where('reportPendingCount','>',0)),
+              (csnap)=> ingestCommentGroupSnap(csnap)
+            );
+            const stopB = onSnapshot(
+              query(collection(db,'markers', mid, 'comments'), where('hiddenUntil','>', now)),
+              (csnap)=> ingestCommentGroupSnap(csnap)
+            );
+            // 댓글 reports(pending) -> 댓글 부모만 반영
+            const stopC = onSnapshot(
+              query(collectionGroup(db,'reports'), where('status','==','pending')),
+              async (rsnap)=>{
+                const tasks=[];
+                rsnap.forEach(d=>{
+                  const parent = d.ref.parent.parent;
+                  if (!parent) return;
+                  if (parent.parent && parent.parent.id==='comments' &&
+                      parent.parent.parent && parent.parent.parent.id==='markers' &&
+                      parent.parent.parent.id === 'markers' && parent.parent.parent.parent) {
+                    // 같은 프로젝트 내 모든 마커에서 오므로 필터링은 ingest 쪽에서 처리
+                    tasks.push(getDoc(parent));
+                  }
+                });
+                const parents = await Promise.all(tasks);
+                const fakeSnap = { forEach: (fn)=> parents.forEach(ps=> { if(ps && ps.exists()) fn(ps); }) };
+                ingestCommentGroupSnap(fakeSnap);
+              }
+            );
+
+            const prev = fallbackUnsubs.get(mid);
+            if (prev){ try{prev();}catch{} }
+            fallbackUnsubs.set(mid, ()=>{ try{stopA();}catch{} try{stopB();}catch{} try{stopC();}catch{} });
+          });
+        };
+
+        const stop1 = onSnapshot(q1, attachMarker);
+        const stop2 = onSnapshot(q2, attachMarker);
+        unsubRepComments = ()=> { try{stop1();}catch{} try{stop2();}catch{} clearFallbackSubs(); };
+      } else {
+        fallbackActive = false;
+      }
     }
 
-    // 그룹 스냅을 reportedComments(Map)로 병합
     function ingestCommentGroupSnap(snap){
       const now = nowMs();
       const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
@@ -772,12 +831,10 @@
     }
 
     function renderReportedComments(){
-      if (!adminReportMode){
-        repCommentList.innerHTML='';
-        return;
-      }
+      const repCommentList = document.getElementById('repCommentList');
+      if (!adminReportMode){ repCommentList.innerHTML=''; return; }
       if (!reportedComments.length){
-        repCommentList.innerHTML = `<div style="opacity:.7">신고 접수된 댓글이 없습니다.</div>`;
+        repCommentList.innerHTML = `<div style="opacity:.7">신고 접수된 댓글이 없습니다.${fallbackActive?' (폴백모드)':''}</div>`;
         return;
       }
       let list = Array.isArray(reportedComments) ? [...reportedComments] : [];
@@ -803,7 +860,6 @@
         `;
       }).join('');
 
-      // 한 번만 바인딩되도록 onclick 사용
       repCommentList.onclick = async (e)=>{
         const card = e.target.closest('.ritem'); if (!card) return;
         const markerId = card.getAttribute('data-mid');
@@ -870,8 +926,7 @@
       };
     }
 
-    /* ---------------- 마커 구독/렌더 ---------------- */
-    const markerMap=new Map(); // id -> {group, marker, data, seq}
+    const markerMap=new Map();
     let unsubMain=null, unsubPending=null;
 
     function subscribeMarkers(){
@@ -940,10 +995,8 @@
     }
     function applyAllVisibility(){ markerMap.forEach((_, id)=> applyVisibility(id)); }
 
-    // 48시간 경과 자동 복귀(1분마다 재평가)
     setInterval(()=> { applyAllVisibility(); recomputeSeqs(); }, 60*1000);
 
-    /* ---------------- 신고 흐름 변경: 프록시 생성 ---------------- */
     async function _touchFirstAtIfEmpty(refPath){
       const r = doc(db, ...refPath);
       const s = await getDoc(r);
@@ -953,17 +1006,12 @@
       return r;
     }
 
-    // 댓글 신고 제출 (유저)
     async function submitCommentReport(markerId, commentId, reason){
       const cref = doc(db,'markers', markerId, 'comments', commentId);
       const cs = await getDoc(cref);
       if (!cs.exists()){ alert('댓글이 삭제되었습니다.'); return; }
       const cd = cs.data()||{};
       if (cd.reportsBlocked){ alert('관리자에 의해 이 댓글은 신고가 차단되었습니다.'); return; }
-
-      try{
-        if (cd.reportsBlocked){ alert('이 댓글은 신고 차단 상태입니다.'); return; }
-      }catch(_e){}
 
       await addDoc(collection(db,'markers', markerId, 'comments', commentId, 'reports'), {
         type:'comment', markerId, commentId, uid: me?.uid||null, reason,
@@ -992,7 +1040,6 @@
       else alert('신고가 접수되었습니다. 조건 충족 시 자동으로 가려집니다.');
     }
 
-    // 핀 신고 제출 (유저)
     async function reportMarker(m, reason){
       if (!firebaseOk) return { ok:false, hid:false };
       const mref = doc(db,'markers', m.id);
@@ -1028,7 +1075,6 @@
       return { ok:true, hid:!!res.hidden };
     }
 
-    /* ---------- 동적 시퀀스 ---------- */
     function visibleForSeq(m){
       if (!m) return false;
       if (adminReportMode) return isHiddenByReport(m);
@@ -1058,7 +1104,6 @@
       }
     }
 
-    /* ---------------- 상세 패널 + 캐러셀 + 댓글 ---------------- */
     const $info=document.getElementById('info');
     const $infoTitle=document.getElementById('infoTitle');
     const $infoId=document.getElementById('infoId');
@@ -1093,7 +1138,6 @@
     $carNext.onclick = ()=>{ if (carItems.length){ carIdx = (carIdx + 1) % carItems.length; updateCarousel(); } };
     $carDots.onclick = (e)=>{ const d = e.target.closest('.dot'); if (!d) return; carIdx = +d.getAttribute('data-i') || 0; updateCarousel(); };
 
-    // ===== 댓글 =====
     const $cForm = document.getElementById('cForm');
     const $cBody = document.getElementById('cBody');
     const $cSubmit = document.getElementById('cSubmit');
@@ -1113,11 +1157,10 @@
           const c = { id:d.id, ...d.data() };
           const hidden = c.hiddenUntil ? (toMs(c.hiddenUntil) > now) : false;
           if (c.deleted) return;
-          if (!isAdmin && hidden) return;   // 관리자는 숨김 댓글도 본다
+          if (!isAdmin && hidden) return;
           raw.push({ ...c, _hidden:hidden });
         });
 
-        // 신고 배지/카운터
         const items = await Promise.all(raw.map(async c=>{
           let cnt = c.reportPendingCount || 0;
           try{
@@ -1228,7 +1271,6 @@
       $infoId.textContent = seqNum ? '#'+seqNum : '#-';
       const statusText = m.status || 'pending';
 
-      // ★ 핀 신고 뱃지(누적)
       const pinRepCnt = await fetchMarkerPendingCount(m.id);
       $infoMeta.innerHTML = `
         <span>${labelFor(m.category)} · by ${esc(m.displayName||'익명')} · ${statusText}</span>
@@ -1258,7 +1300,6 @@
       const canEdit = isMine && (m.status==='pending'||m.status===undefined);
       const hiddenNow = isHiddenByReport(m);
 
-      // ★ 관리자: 신고 반려/차단 버튼을 항상 노출
       $infoBtns.innerHTML = `
         <button id="btnReport" class="primary">핀 신고</button>
         ${canEdit ? `<button id="btnEdit">수정</button><button id="btnDel" class="warn">삭제</button>`:''}
@@ -1365,7 +1406,6 @@
     let currentOpenId=null;
     $infoClose.onclick=()=>{ $info.style.display='none'; currentOpenId=null; if (unsubComments){unsubComments();unsubComments=null;} };
 
-    /* ---------------- 모드 전환 ---------------- */
     let mode='search';
     const btnSearch=document.getElementById('btnSearch');
     const btnPlace =document.getElementById('btnPlace');
@@ -1382,7 +1422,6 @@
     };
     setMode('search');
 
-    /* ---------------- 입력/저장 ---------------- */
     const modal=document.getElementById('modal');
     const t=document.getElementById('mTitle');
     const b=document.getElementById('mBody');
@@ -1396,7 +1435,6 @@
     window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.style.display==='flex'){ modal.style.display='none'; pending=null; }});
     nickSel.onchange=()=> nickCus.style.display=(nickSel.value==='custom')?'block':'none';
 
-    // 포켓몬 편집기
     const pkEditor = document.getElementById('pkEditor');
     const pkAddInput = document.getElementById('pkAddInput');
     const pkAddBtn = document.getElementById('pkAddBtn');
@@ -1473,7 +1511,6 @@
       }
     };
 
-    /* ---------------- 텍스트 매칭 ---------------- */
     function matchText(m){
       if (!textFilter) return true;
       const q = textFilter;
@@ -1484,7 +1521,6 @@
       return false;
     }
 
-    // 초기 구독
     subscribeMarkers();
     subscribeReportedCommentsAdmin();
   </script>
