@@ -54,7 +54,8 @@
     #info header{display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #333}
     #info .thumb{width:100%; max-height:260px; object-fit:cover; background:#000}
     #info .pad{padding:12px}
-    #info .meta{font-size:12px; color:#aaa}
+    #info .meta{font-size:12px; color:#aaa; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    #info .badge{background:#ff9800;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
     #info .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
     #info button{background:#2a2a2a; color:#fff; border:0; padding:6px 10px; border-radius:8px; cursor:pointer}
     #info button.primary{background:#3d6cff}
@@ -85,11 +86,12 @@
     #comments .cform button{ background:#3d6cff; border:0; color:#fff; padding:6px 10px; border-radius:8px }
     #comments .clist{ margin-top:10px; display:grid; gap:10px }
     .citem{ background:#151515; border:1px solid #2a2a2a; border-radius:10px; padding:10px }
-    .citem .meta{ font-size:12px; color:#aaa; display:flex; gap:8px; align-items:center }
+    .citem .meta{ font-size:12px; color:#aaa; display:flex; gap:8px; align-items:center; flex-wrap:wrap }
     .citem .act{ display:flex; gap:8px; margin-top:6px }
     .citem .btn{ background:#2a2a2a; color:#fff; border:0; padding:4px 8px; border-radius:8px; cursor:pointer }
     .citem .btn.warn{ background:#ff5252 }
-    .badge-report{background:#ff9800;color:#111;padding:2px 6px;border-radius:6px;font-size:11px;margin-left:auto}
+    .badge-report{background:#ff9800;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
+    .badge-hidden{background:#90caf9;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
 
     /* 입력 모달 */
     #modal{display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;}
@@ -149,7 +151,7 @@
       </div>
       <div id="repCommentList" class="rlist"></div>
       <div class="hr"></div>
-      <div style="font-size:12px;opacity:.8">댓글 문서의 신고카운터 기반으로 표시합니다.</div>
+      <div style="font-size:12px;opacity:.8">신고 카운터/숨김상태/보류 리포트 기반으로 표시합니다.</div>
     </div>
 
     <div class="hr"></div>
@@ -249,9 +251,8 @@
     const esc = (s)=> (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const nowMs = ()=> Date.now();
     const HIDE_MS = 48 * 3600 * 1000;
-    const HIDE_DELAY_MS = 2 * 3600 * 1000; // 최초 신고 후 2시간
-    const HIDE_COUNT = 5;                   // 5회 이상
-
+    const HIDE_DELAY_MS = 2 * 3600 * 1000; // 2시간
+    const HIDE_COUNT = 5;                   // 5회
     const toMs = (t)=>{
       if (!t) return null;
       if (t.toMillis) return t.toMillis();
@@ -620,7 +621,6 @@
       return a.firstReportAt - b.firstReportAt;
     }
 
-    // 보고 카운터를 읽어 정책 적용 (댓글)
     async function ensureCommentHidePolicy(markerId, commentId){
       try{
         const cs = await getDoc(doc(db,'markers', markerId, 'comments', commentId));
@@ -643,7 +643,6 @@
       }
     }
 
-    // 보고 카운터를 읽어 정책 적용 (마커)
     async function ensureMarkerHidePolicy(markerId){
       try{
         const ms = await getDoc(doc(db,'markers', markerId));
@@ -670,42 +669,75 @@
       }
     }
 
-    // 관리자: 신고된 댓글 목록 구독 (reportPendingCount>0)
+    // ===== 관리자: 신고된 댓글 목록 구독 (3갈래 병합) =====
     async function subscribeReportedCommentsAdmin(){
       if (unsubRepComments){unsubRepComments();unsubRepComments=null;}
       if (!firebaseOk || !isAdmin){
         reportedComments = []; renderReportedComments(); return;
       }
-      const qC = query(collectionGroup(db,'comments'), where('reportPendingCount','>',0));
-      unsubRepComments = onSnapshot(qC, async snap=>{
-        const now = nowMs();
-        const items = [];
-        const jobs = [];
-        snap.forEach(d=>{
-          const p = d.ref.path.split('/'); // markers/{mid}/comments/{cid}
-          if (!(p[0]==='markers' && p[2]==='comments')) return;
-          const markerId = p[1], commentId = p[3];
-          const c = d.data()||{};
-          const first = toMs(c.firstReportAt)||now;
-          const hidden = toMs(c.hiddenUntil) > now;
-          const remainMs = hidden ? (toMs(c.hiddenUntil)-now) : 0;
-          const count = c.reportPendingCount||0;
-          const eligible = (count>=HIDE_COUNT) || (!!first && (now-first)>=HIDE_DELAY_MS);
-          const item = { markerId, commentId, body:c.body||'(본문 없음)', firstReportAt:first, remainMs, hidden, count, eligible };
-          items.push(item);
 
-          // 조건 충족인데 아직 숨김이 아니라면 정책 즉시 적용
-          if (eligible && !hidden){
-            jobs.push(ensureCommentHidePolicy(markerId, commentId));
-          }
-        });
-        await Promise.allSettled(jobs);
-        reportedComments = items.sort(sortReported);
-        renderReportedComments();
-      }, err=>{
-        console.warn('[subscribeReportedCommentsAdmin] error', err);
-        reportedComments = []; renderReportedComments();
+      const nowDate = new Date();
+
+      // 1) 카운터 기준
+      const stop1 = onSnapshot(
+        query(collectionGroup(db,'comments'), where('reportPendingCount','>',0)),
+        (snap)=> ingestCommentGroupSnap(snap),
+        (err)=> console.warn('[rep-list count]', err)
+      );
+
+      // 2) 숨김 상태 기준
+      const stop2 = onSnapshot(
+        query(collectionGroup(db,'comments'), where('hiddenUntil','>', nowDate)),
+        (snap)=> ingestCommentGroupSnap(snap),
+        (err)=> console.warn('[rep-list hidden]', err)
+      );
+
+      // 3) 보류 report 기준 (구버전 호환)
+      const stop3 = onSnapshot(
+        query(collectionGroup(db,'reports'), where('status','==','pending')),
+        async (snap)=>{
+          const tasks = [];
+          snap.forEach(d=>{
+            const parentCommentRef = d.ref.parent.parent; // .../comments/{cid}
+            if (!parentCommentRef) return;
+            tasks.push(getDoc(parentCommentRef));
+          });
+          const parents = await Promise.all(tasks);
+          const fakeSnap = { forEach: (fn)=> parents.forEach(ps=> { if(ps && ps.exists()) fn(ps); }) };
+          ingestCommentGroupSnap(fakeSnap);
+        },
+        (err)=> console.warn('[rep-list reports]', err)
+      );
+
+      unsubRepComments = ()=>{ stop1(); stop2(); stop3(); };
+    }
+
+    // 그룹 스냅을 reportedComments(Map)로 병합
+    function ingestCommentGroupSnap(snap){
+      const now = nowMs();
+      const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
+      snap.forEach(d=>{
+        const p = d.ref.path.split('/'); // markers/{mid}/comments/{cid}
+        if (!(p[0]==='markers' && p[2]==='comments')) return;
+        const markerId = p[1], commentId = p[3];
+        const c = d.data()||{};
+        const first = toMs(c.firstReportAt)||now;
+        const hidden = toMs(c.hiddenUntil) > now;
+        const remainMs = hidden ? (toMs(c.hiddenUntil)-now) : 0;
+        const count = c.reportPendingCount||0;
+        const eligible = (count>=HIDE_COUNT) || (!!first && (now-first)>=HIDE_DELAY_MS);
+
+        const key = `${markerId}|${commentId}`;
+        const prev = idx.get(key)||{};
+        const merged = {
+          markerId, commentId,
+          body: c.body || prev.body || '(본문 없음)',
+          firstReportAt:first, remainMs, hidden, count, eligible
+        };
+        idx.set(key, merged);
       });
+      reportedComments = [...idx.values()].sort(sortReported);
+      renderReportedComments();
     }
 
     function renderReportedComments(){
@@ -750,12 +782,13 @@
 
         if (e.target.matches('[data-dismiss]')){
           try{
-            // 모든 pending report는 rejected 처리(있다면), 카운터 초기화, 블록
+            // 보류 report = rejected 처리
             try{
               const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
               const s = await getDocs(q);
               await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
             }catch(_e){}
+            // 댓글 자체 정리
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), {
               hiddenUntil: null, reportPendingCount: 0, reportsBlocked: true
             });
@@ -850,7 +883,6 @@
       return r;
     }
 
-    // 댓글 신고 버튼 핸들러에서 사용
     async function submitCommentReport(markerId, commentId, reason){
       const cref = doc(db,'markers', markerId, 'comments', commentId);
       const cs = await getDoc(cref);
@@ -858,7 +890,7 @@
       const cd = cs.data()||{};
       if (cd.reportsBlocked){ alert('관리자에 의해 이 댓글은 신고가 차단되었습니다.'); return; }
 
-      // 이전에 "반려"된 이력이 있으면 차단 플래그 보정
+      // 과거 반려 이력 보정
       try{
         const qrej = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','rejected'));
         const rj = await getDocs(qrej);
@@ -869,7 +901,6 @@
         }
       }catch(_e){}
 
-      // 보고 저장 + 카운터 증가
       await addDoc(collection(db,'markers', markerId, 'comments', commentId, 'reports'), {
         type:'comment', markerId, commentId, uid: me?.uid||null, reason,
         status:'pending', createdAt: serverTimestamp()
@@ -882,7 +913,6 @@
       else alert('신고가 접수되었습니다. 조건 충족 시 자동으로 가려집니다.');
     }
 
-    // 핀 신고
     async function reportMarker(m, reason){
       if (!firebaseOk) return { ok:false, hid:false };
       const mref = doc(db,'markers', m.id);
@@ -901,7 +931,6 @@
         }
       }catch(_e){}
 
-      // 저장 + 카운터
       try{
         await addDoc(collection(db,'markers', m.id, 'reports'), {
           type:'marker', markerId: m.id, uid: me?.uid||null, reason,
@@ -982,7 +1011,7 @@
     $carNext.onclick = ()=>{ if (carItems.length){ carIdx = (carIdx + 1) % carItems.length; updateCarousel(); } };
     $carDots.onclick = (e)=>{ const d = e.target.closest('.dot'); if (!d) return; carIdx = +d.getAttribute('data-i') || 0; updateCarousel(); };
 
-    // 댓글
+    // ===== 댓글 =====
     const $cForm = document.getElementById('cForm');
     const $cBody = document.getElementById('cBody');
     const $cSubmit = document.getElementById('cSubmit');
@@ -1001,17 +1030,16 @@
         snap.forEach(d=>{
           const c = { id:d.id, ...d.data() };
           const hidden = c.hiddenUntil ? (toMs(c.hiddenUntil) > now) : false;
-          if (c.deleted) return; if (hidden) return;
-          raw.push(c);
+          if (c.deleted) return;
+          if (!isAdmin && hidden) return;   // ★ 관리자는 숨김 댓글도 본다
+          raw.push({ ...c, _hidden:hidden });
         });
 
-        // 신고 배지용 카운터
+        // 신고 배지/카운터
         const items = await Promise.all(raw.map(async c=>{
-          let cnt = 0;
+          let cnt = c.reportPendingCount || 0;
           try{
-            cnt = c.reportPendingCount || 0;
             if (!cnt){
-              // 구버전 보정: pending reports 갯수 조회
               const q = query(collection(db,'markers', marker.id, 'comments', c.id, 'reports'), where('status','==','pending'));
               const s = await getDocs(q); cnt = s.size || 0;
             }
@@ -1024,6 +1052,7 @@
             <div class="meta">
               ${c.displayName || '익명'} · ${new Date(toMs(c.createdAt||Date.now())).toLocaleString()}
               ${c._repCnt>0 ? `<span class="badge-report">신고 ${c._repCnt}</span>`:''}
+              ${c._hidden ? `<span class="badge-hidden">가림중</span>`:''}
             </div>
             <div class="body" style="white-space:pre-wrap; margin-top:6px">${esc(c.body||'')}</div>
             <div class="act">
@@ -1032,7 +1061,6 @@
             </div>
           </div>`).join('');
 
-        // 신고
         $cList.querySelectorAll('[data-crep]').forEach(btn=>{
           btn.onclick = async ()=>{
             if (!me){ alert('로그인이 필요합니다'); return; }
@@ -1041,7 +1069,6 @@
             await submitCommentReport(marker.id, cid, reason);
           };
         });
-        // 삭제
         $cList.querySelectorAll('[data-cdel]').forEach(btn=>{
           btn.onclick = async ()=>{
             const cid = btn.getAttribute('data-cdel');
@@ -1070,6 +1097,18 @@
       return (first.type==='video')
         ? `<video class="thumb" controls src="${first.url}"></video>`
         : `<img class="thumb" src="${first.url}" alt="thumb">`;
+    }
+
+    async function fetchMarkerPendingCount(markerId){
+      try{
+        const ms = await getDoc(doc(db,'markers', markerId));
+        let cnt = (ms.exists() ? (ms.data().reportPendingCount||0) : 0);
+        if (!cnt){
+          const q = query(collection(db,'markers', markerId, 'reports'), where('status','==','pending'));
+          const s = await getDocs(q); cnt = s.size||0;
+        }
+        return cnt;
+      }catch(_e){ return 0; }
     }
 
     function openInfoWithSeq(m){
@@ -1101,12 +1140,19 @@
       }
     }
 
-    function openInfo(m, seqNum){
+    async function openInfo(m, seqNum){
       currentOpenId=m.id;
       $infoTitle.textContent=m.title||'(제목 없음)';
       $infoId.textContent = seqNum ? '#'+seqNum : '#-';
       const statusText = m.status || 'pending';
-      $infoMeta.textContent = `${labelFor(m.category)} · by ${m.displayName||'익명'} · ${statusText}`;
+
+      // ★ 핀 신고 뱃지(누적)
+      const pinRepCnt = await fetchMarkerPendingCount(m.id);
+      $infoMeta.innerHTML = `
+        <span>${labelFor(m.category)} · by ${esc(m.displayName||'익명')} · ${statusText}</span>
+        ${pinRepCnt>0 ? `<span class="badge">신고 ${pinRepCnt}</span>`:''}
+      `;
+
       $infoMediaTop.innerHTML = mediaTopEl(m);
       $infoBody.textContent = m.body||'';
 
@@ -1130,6 +1176,7 @@
       const canEdit = isMine && (m.status==='pending'||m.status===undefined);
       const hiddenNow = isHiddenByReport(m);
 
+      // ★ 관리자: 신고 반려/차단 버튼을 항상 노출 (5회 미만이어도)
       $infoBtns.innerHTML = `
         <button id="btnReport" class="primary">핀 신고</button>
         ${canEdit ? `<button id="btnEdit">수정</button><button id="btnDel" class="warn">삭제</button>`:''}
@@ -1138,7 +1185,8 @@
               ? `<button id="btnAppr" class="primary">승인</button><button id="btnReject" class="warn">반려</button>`
               : ``}
             <button id="btnAdminDel" class="warn">관리자 삭제</button>
-            ${hiddenNow ? `<button id="btnReportDismiss">신고 반려(숨김 해제)</button>`:''}
+            <button id="btnReportDismiss" class="">신고 반려/차단</button>
+            ${hiddenNow ? `<button id="btnUnhideNow">숨김 해제</button>`:''}
           ` : ``}
       `;
 
@@ -1196,10 +1244,28 @@
       const btnReportDismiss = document.getElementById('btnReportDismiss');
       if (btnReportDismiss) btnReportDismiss.onclick = async ()=>{
         try{
+          // 보류 report 모두 반려
+          try{
+            const q = query(collection(db,'markers', m.id, 'reports'), where('status','==','pending'));
+            const s = await getDocs(q);
+            await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
+          }catch(_e){}
           await updateDoc(doc(db,'markers', m.id), { hiddenUntil: null, reportPendingCount: 0, reportsBlocked: true });
           const rec = markerMap.get(m.id);
-          if (rec){ rec.data.hiddenUntil = null; rec.data.reportsBlocked = true; applyVisibility(m.id); }
-          alert('숨김을 해제하고, 이 핀에 대한 신고를 차단했습니다.');
+          if (rec){ rec.data.hiddenUntil = null; rec.data.reportPendingCount=0; rec.data.reportsBlocked=true; applyVisibility(m.id); }
+          alert('핀 신고를 반려하고, 추가 신고를 차단했습니다.');
+        }catch(e){
+          alert('처리 실패: ' + (e?.message||e));
+        }
+      };
+
+      const btnUnhideNow = document.getElementById('btnUnhideNow');
+      if (btnUnhideNow) btnUnhideNow.onclick = async ()=>{
+        try{
+          await updateDoc(doc(db,'markers', m.id), { hiddenUntil: null });
+          const rec = markerMap.get(m.id);
+          if (rec){ rec.data.hiddenUntil = null; applyVisibility(m.id); }
+          alert('숨김을 해제했습니다.');
         }catch(e){
           alert('해제 실패: ' + (e?.message||e));
         }
