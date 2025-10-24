@@ -706,10 +706,9 @@
         (err)=> console.warn('[rep-list reports]', err)
       ));
 
-      // 4) 관리자 프록시 컬렉션 직접 구독 (가장 확실한 경로)
+      // 4) 관리자 프록시 컬렉션 직접 구독
       stops.push(onSnapshot(collection(db,'adminReports'), snap=>{
         const now = nowMs();
-        // adminReports 문서는 markerId, commentId, body, createdAt, proxyType('comment'|'marker')
         const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
         snap.forEach(d=>{
           const docData = d.data()||{};
@@ -724,7 +723,7 @@
             firstReportAt:first,
             remainMs: 0,
             hidden: false,
-            count: docData.reportPendingCount || 1, // 관리자 프록시는 최소 1
+            count: docData.reportPendingCount || 1,
             eligible: false,
             adminProxyId: d.id
           };
@@ -737,7 +736,7 @@
       unsubRepComments = ()=> stops.forEach(s=> s());
     }
 
-    // 그룹 스냅을 reportedComments(Map)로 병합 (기존 코드 활용)
+    // 그룹 스냅을 reportedComments(Map)로 병합
     function ingestCommentGroupSnap(snap){
       const now = nowMs();
       const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
@@ -772,22 +771,28 @@
         repCommentList.innerHTML = `<div style="opacity:.7">신고 접수된 댓글이 없습니다.</div>`;
         return;
       }
-      let list = [...reportedComments];
+      let list = Array.isArray(reportedComments) ? [...reportedComments] : [];
       if (repFilterMode==='eligible')   list = list.filter(x=> x.eligible);
       if (repFilterMode==='ineligible') list = list.filter(x=> !x.eligible);
       list.sort(sortReported);
-      repCommentList.innerHTML = list.map(rc=>`
-        <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc(rc.commentId||'')}" data-adminproxy="${esc(rc.adminProxyId||'')}">
-          <div style="font-weight:600">#${rc.markerId.slice(0,6)}… · 댓글</div>
-          <div style="white-space:pre-wrap;margin-top:6px">${esc(rc.body || '')}</div>
-          <div class="meta">${esc(statusTextOf(rc))}</div>
-          <div class="act">
-            <button class="rbtn" data-jump>해당 핀 보기</button>
-            <button class="rbtn" data-dismiss>신고 반려</button>
-            <button class="rbtn warn" data-delete>원문 삭제</button>
+
+      repCommentList.innerHTML = list.map(rc=>{
+        const midSafe = rc && rc.markerId ? String(rc.markerId).slice(0,6) : '??????';
+        const cidSafe = rc && rc.commentId ? rc.commentId : '';
+        const bodySafe = rc && rc.body ? rc.body : '(본문 없음)';
+        return `
+          <div class="ritem" data-mid="${esc(rc?.markerId||'')}" data-cid="${esc(cidSafe)}" data-adminproxy="${esc(rc?.adminProxyId||'')}">
+            <div style="font-weight:600">#${midSafe}… · 댓글</div>
+            <div style="white-space:pre-wrap;margin-top:6px">${esc(bodySafe)}</div>
+            <div class="meta">${esc(statusTextOf(rc||{}))}</div>
+            <div class="act">
+              <button class="rbtn" data-jump>해당 핀 보기</button>
+              <button class="rbtn" data-dismiss>신고 반려</button>
+              <button class="rbtn warn" data-delete>원문 삭제</button>
+            </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
       repCommentList.onclick = async (e)=>{
         const card = e.target.closest('.ritem'); if (!card) return;
@@ -811,35 +816,26 @@
 
         if (e.target.matches('[data-dismiss]')){
           try{
-            // 1) admin proxy가 있으면 삭제
             if (proxyId){
               await deleteDoc(doc(db,'adminReports', proxyId));
             } else {
-              // admin proxy가 없으면 adminReports에서 해당 marker/comment를 찾아 삭제
               try{
                 const q = query(collection(db,'adminReports'), where('markerId','==', markerId), where('commentId','==', commentId));
                 const s = await getDocs(q);
                 await Promise.all(s.docs.map(d=> deleteDoc(d.ref)));
               }catch(_e){}
             }
-
-            // 2) 원본 댓글의 보류 report 모두 rejected
             try{
               const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
               const s = await getDocs(q);
               await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
             }catch(_e){}
-
-            // 3) 원본 댓글 doc: hiddenUntil = null, reportPendingCount=0, reportsBlocked = true
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), {
               hiddenUntil: null,
               reportPendingCount: 0,
               reportsBlocked: true
             });
-
-            // 4) 원본 핀(reportPendingCount) 정리: 재계산 또는 0으로 클리어(간단히 0)
             try{ await updateDoc(doc(db,'markers', markerId), { reportPendingCount: 0 }); }catch(_e){}
-
             alert('신고 반려 완료 — 원본 댓글의 신고 카운트/뱃지를 제거하고 추가 신고를 차단했습니다.');
           }catch(err){
             alert('반려 처리 실패: ' + (err?.message||err));
@@ -849,9 +845,7 @@
         if (e.target.matches('[data-delete]')){
           if (!confirm('관리자 권한으로 원본 댓글을 삭제하시겠습니까?')) return;
           try{
-            // delete original comment (mark deleted=true)
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), { deleted:true });
-            // delete any admin proxy
             if (proxyId) await deleteDoc(doc(db,'adminReports', proxyId));
             else {
               try{
@@ -957,22 +951,18 @@
       const cd = cs.data()||{};
       if (cd.reportsBlocked){ alert('관리자에 의해 이 댓글은 신고가 차단되었습니다.'); return; }
 
-      // 과거 반려 이력 확인 (만약 반려 이력이 있으면 차단)
       try{
         if (cd.reportsBlocked){ alert('이 댓글은 신고 차단 상태입니다.'); return; }
       }catch(_e){}
 
-      // 1) 보류 리포트 추가
       await addDoc(collection(db,'markers', markerId, 'comments', commentId, 'reports'), {
         type:'comment', markerId, commentId, uid: me?.uid||null, reason,
         status:'pending', createdAt: serverTimestamp()
       });
 
-      // 2) firstReportAt 터치 및 카운터 증가
       await _touchFirstAtIfEmpty(['markers', markerId, 'comments', commentId]);
       await updateDoc(cref, { reportPendingCount: increment(1) });
 
-      // 3) 관리자 프록시 문서 생성 (adminReports)
       try{
         const body = cd.body || '(본문 없음)';
         await addDoc(collection(db,'adminReports'), {
@@ -987,7 +977,6 @@
         console.warn('[admin proxy create] failed', _e);
       }
 
-      // 4) 적용규칙 확인(누적/경과시간)
       const res = await ensureCommentHidePolicy(markerId, commentId);
       if (res.hidden) alert('신고 누적/경과시간으로 댓글이 임시 숨김 처리되었습니다.');
       else alert('신고가 접수되었습니다. 조건 충족 시 자동으로 가려집니다.');
@@ -1001,7 +990,6 @@
       const md = ms.data()||{};
       if (md.reportsBlocked){ alert('관리자에 의해 이 핀은 신고가 차단되었습니다.'); return {ok:false, hid:false}; }
 
-      // 1) add report
       try{
         await addDoc(collection(db,'markers', m.id, 'reports'), {
           type:'marker', markerId: m.id, uid: me?.uid||null, reason,
@@ -1009,11 +997,9 @@
         });
       }catch(_e){}
 
-      // 2) touch first
       await _touchFirstAtIfEmpty(['markers', m.id]);
       await updateDoc(mref, { reportPendingCount: increment(1) });
 
-      // 3) admin proxy
       try{
         await addDoc(collection(db,'adminReports'), {
           proxyType: 'marker',
@@ -1026,7 +1012,6 @@
         });
       }catch(_e){ console.warn('[admin proxy create] failed', _e); }
 
-      // 4) hide policy
       const res = await ensureMarkerHidePolicy(m.id);
       if (res.hidden) alert('신고 누적/경과시간으로 핀이 임시 숨김 처리되었습니다.');
       else alert('신고가 접수되었습니다. 조건 충족 시 자동으로 가려집니다.');
@@ -1331,15 +1316,12 @@
       const btnReportDismiss = document.getElementById('btnReportDismiss');
       if (btnReportDismiss) btnReportDismiss.onclick = async ()=>{
         try{
-          // 보류 report 모두 반려
           try{
             const q = query(collection(db,'markers', m.id, 'reports'), where('status','==','pending'));
             const s = await getDocs(q);
             await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
           }catch(_e){}
-          // reportsBlocked + reset counts
           await updateDoc(doc(db,'markers', m.id), { hiddenUntil: null, reportPendingCount: 0, reportsBlocked: true });
-          // delete admin proxy docs for this marker
           try{
             const q2 = query(collection(db,'adminReports'), where('markerId','==', m.id));
             const s2 = await getDocs(q2);
