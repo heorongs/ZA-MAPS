@@ -42,6 +42,8 @@
     .ritem .act{display:flex;gap:8px;margin-top:8px}
     .rbtn{background:#2a2f3a;color:#fff;border:0;padding:6px 10px;border-radius:8px;cursor:pointer}
     .rbtn.warn{background:#ff5252}
+    .rep-sort{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px}
+    .rep-sort .flt{padding:4px 10px}
 
     /* 우하단 상세 패널 */
     #info{position:fixed; right:10px; bottom:10px; width:420px; max-height:75%;
@@ -133,6 +135,12 @@
     <!-- (B) 신고 관리 모드: 필터 대신 신고된 댓글 목록 -->
     <div id="sideReports" style="display:none">
       <h3>신고된 댓글</h3>
+      <div class="rep-sort" id="repSortBar">
+        <button class="flt on" data-sort="mix">종합</button>
+        <button class="flt" data-sort="count">누적횟수</button>
+        <button class="flt" data-sort="remain">남은숨김시간</button>
+        <button class="flt" data-sort="oldest">오래된신고</button>
+      </div>
       <div id="repCommentList" class="rlist"></div>
       <div class="hr"></div>
       <div style="font-size:12px;opacity:.8">최근 48시간 내 접수·대기 중인 댓글 신고만 노출됩니다.</div>
@@ -381,7 +389,7 @@
     const $adminBadge = document.getElementById('adminBadge');
     const $btnPendingOnly = document.getElementById('fltPending');
     const $btnReportedOnly = document.getElementById('fltReported');
-    const $btnAdminReport = document.getElementById('btnAdminReport']);
+    const $btnAdminReport = document.getElementById('btnAdminReport');
     let me=null, isAdmin=false;
 
     $login.onclick = async (e) => {
@@ -474,6 +482,15 @@
     const sideReports = document.getElementById('sideReports');
     const repCommentList = document.getElementById('repCommentList');
     const fltList = document.getElementById('fltList');
+    const repSortBar = document.getElementById('repSortBar');
+    let repSortMode = 'mix'; // 'mix' | 'count' | 'remain' | 'oldest'
+
+    repSortBar.onclick = (e)=>{
+      const b=e.target.closest('[data-sort]'); if(!b) return;
+      repSortMode = b.getAttribute('data-sort');
+      [...repSortBar.children].forEach(x=> x.classList.toggle('on', x===b));
+      renderReportedComments(); // 현재 데이터로 즉시 정렬 반영
+    };
 
     function buildFilters(){
       fltList.innerHTML = CATEGORIES.map(c=>`<button class="flt on" data-cat="${c.key}">${c.label}</button>`).join('');
@@ -576,9 +593,10 @@
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
-    /* ---------------- 신고 피드(관리자 모드용) — 교체된 섹션 ---------------- */
+    /* ---------------- 신고 피드(관리자 모드용) ---------------- */
     let reportedMarkerSet = new Set(); // 최근 48h 내 marker pending 신고 존재
-    let reportedComments = [];        // {markerId, commentId, body?, reason?, createdAt}
+    // 신고된 댓글: { markerId, commentId, body, reason?, createdAt(첫 신고시점), count, remainMs }
+    let reportedComments = [];
 
     let unsubRepMarkers = null;
     let unsubRepComments = null;
@@ -625,53 +643,67 @@
         console.warn('[reported markers] collectionGroup error', err);
       });
 
-      // --- 2) 신고된 댓글: 우선 reports 그룹(pending) 시도, 실패/0건이면 폴백
+      // --- 2) 신고된 댓글 집계
       if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
       const qRC = query(collectionGroup(db,'reports'), where('status','==','pending'));
       unsubRepComments = onSnapshot(qRC, async snap=>{
-        let items = [];
-        const fetches = [];
-        snap.forEach(d=>{
-          const data = d.data()||{};
-          const path = d.ref.path.split('/');
-          const isCommentReport = data.type==='comment' || (path.length>=6 && path[2]==='comments' && path[4]==='reports');
-          if (!isCommentReport) return;
-          if (!within48h(data.createdAt)) return;
-          const markerId = (path[0]==='markers') ? path[1] : (data.markerId || null);
-          const commentId= (path[2]==='comments') ? path[3] : (data.commentId || null);
-          if (!markerId || !commentId) return;
+        try{
+          // 2-1. report 문서 → 댓글 단위로 집계
+          const agg = new Map(); // key: m|c → { markerId, commentId, count, firstReportAt }
+          snap.forEach(d=>{
+            const data = d.data()||{};
+            const path = d.ref.path.split('/');
+            const isCommentReport = data.type==='comment' || (path.length>=6 && path[2]==='comments' && path[4]==='reports');
+            if (!isCommentReport) return;
+            if (!within48h(data.createdAt)) return;
 
-          const item = {
-            id: d.id, markerId, commentId,
-            reason: data.reason || '',
-            createdAt: toMs(data.createdAt) || Date.now(),
-            body: '(불러오는 중…)'
-          };
-          items.push(item);
+            const markerId = (path[0]==='markers') ? path[1] : (data.markerId || null);
+            const commentId= (path[2]==='comments') ? path[3] : (data.commentId || null);
+            if (!markerId || !commentId) return;
 
-          // 댓글 본문 불러오기 (권한 안되면 폴백에서 채워짐)
-          fetches.push(
-            getDoc(doc(db,'markers', markerId, 'comments', commentId))
-              .then(cs=>{ item.body = cs.exists() ? (cs.data()?.body || '(본문 없음)') : '(삭제됨)'; })
-              .catch(()=>{ item.body='(로드 실패)'; })
-          );
-        });
+            const key = `${markerId}|${commentId}`;
+            const createdMs = toMs(data.createdAt) || Date.now();
+            const cur = agg.get(key) || { markerId, commentId, count:0, firstReportAt: createdMs };
+            cur.count += 1;
+            if (createdMs < cur.firstReportAt) cur.firstReportAt = createdMs;
+            agg.set(key, cur);
+          });
 
-        if (fetches.length === 0) { // 읽기권한/인덱스 문제 또는 0건
+          // 2-2. 댓글 본문/숨김상태 읽기
+          const items = [];
+          const fetches = [];
+          for (const ent of agg.values()){
+            const item = { ...ent, body:'(불러오는 중…)', remainMs:0, reason:'' };
+            items.push(item);
+            fetches.push(
+              getDoc(doc(db,'markers', ent.markerId, 'comments', ent.commentId))
+                .then(cs=>{
+                  if (!cs.exists()){ item.body='(삭제됨)'; return; }
+                  const cd = cs.data()||{};
+                  item.body = cd.body || '(본문 없음)';
+                  const hu = toMs(cd.hiddenUntil) || 0;
+                  const remain = Math.max(0, hu - nowMs());
+                  item.remainMs = remain;
+                })
+                .catch(()=>{ item.body='(로드 실패)'; })
+            );
+          }
+          await Promise.all(fetches);
+
+          // 2-3. 정렬 및 그리기
+          reportedComments = items.sort(sortReported);
+          renderReportedComments();
+        }catch(err){
+          console.warn('[reported comments aggregate] error → fallback', err);
           await subscribeReportedCommentsFallback();
-          return;
         }
-
-        await Promise.all(fetches);
-        reportedComments = items.sort((a,b)=>b.createdAt - a.createdAt);
-        renderReportedComments();
       }, async err=>{
         console.warn('[reported comments] collectionGroup error', err);
-        await subscribeReportedCommentsFallback(); // 에러 시 폴백
+        await subscribeReportedCommentsFallback();
       });
     }
 
-    // 폴백: 숨김 적용된 댓글(hiddenUntil > now)을 그룹쿼리로 수집
+    // 폴백: 숨김 적용된 댓글(hiddenUntil > now)을 그룹쿼리로 수집 (count=1, firstReportAt ≈ hiddenUntil - 48h)
     async function subscribeReportedCommentsFallback(){
       try{
         const qHidden = query(collectionGroup(db,'comments'), where('hiddenUntil','>', new Date()));
@@ -684,26 +716,71 @@
           const markerId = path[1];
           const commentId= path[3];
           const data = d.data()||{};
-          const hu = toMs(data.hiddenUntil);
+          const hu = toMs(data.hiddenUntil) || 0;
           if (!hu) return;
-          if ((hu - now) <= 0) return; // 이미 해제 제외
-          const approxCreated = hu - HIDE_MS; // 대략적인 발생 시각
+          const remain = Math.max(0, hu - now);
+          const approxCreated = hu - HIDE_MS; // 대략 48시간 전을 최초 신고시점으로 가정
 
           items.push({
-            id: `${markerId}_${commentId}`,
             markerId, commentId,
-            reason: '(사유 미확인)',
-            createdAt: approxCreated,
-            body: data.body || '(본문 없음)'
+            body: data.body || '(본문 없음)',
+            count: 1,
+            remainMs: remain,
+            firstReportAt: approxCreated
           });
         });
-        reportedComments = items.sort((a,b)=>b.createdAt - a.createdAt);
+        reportedComments = items.sort(sortReported);
         renderReportedComments();
       }catch(err){
         console.warn('[fallback comments] error', err);
         reportedComments = [];
         renderReportedComments();
       }
+    }
+
+    function sortReported(a,b){
+      const now = nowMs();
+      if (repSortMode==='count'){
+        if (b.count!==a.count) return b.count - a.count;
+        if (b.remainMs!==a.remainMs) return b.remainMs - a.remainMs;
+        return a.firstReportAt - b.firstReportAt; // 오래된 순
+      }
+      if (repSortMode==='remain'){
+        if (b.remainMs!==a.remainMs) return b.remainMs - a.remainMs;
+        if (b.count!==a.count) return b.count - a.count;
+        return a.firstReportAt - b.firstReportAt;
+      }
+      if (repSortMode==='oldest'){
+        if (a.firstReportAt!==b.firstReportAt) return a.firstReportAt - b.firstReportAt; // 오래된 순
+        if (b.count!==a.count) return b.count - a.count;
+        return b.remainMs - a.remainMs;
+      }
+      // 종합(가중치): count 0.5, remain 0.3, 오래됨 0.2
+      const maxCount = Math.max(1, ...reportedComments.map(x=>x.count||1));
+      const maxRemain= Math.max(1, ...reportedComments.map(x=>x.remainMs||0), 1);
+      const maxAge   = Math.max(1, ...reportedComments.map(x=> (now - (x.firstReportAt||now)) ), 1);
+
+      const score = (x)=>{
+        const c = (x.count||0) / maxCount;
+        const r = (x.remainMs||0) / maxRemain;
+        const ageMs = now - (x.firstReportAt||now);
+        const o = ageMs / maxAge; // 오래된 게 높게
+        return 0.5*c + 0.3*r + 0.2*o;
+      };
+      const sb = score(b) - score(a);
+      if (sb!==0) return sb;
+      // 동점시 보조 정렬
+      if (b.count!==a.count) return b.count - a.count;
+      if (b.remainMs!==a.remainMs) return b.remainMs - a.remainMs;
+      return a.firstReportAt - b.firstReportAt;
+    }
+
+    function msToHuman(ms){
+      if (!ms || ms<=0) return '해제됨';
+      const h = Math.floor(ms/3600000);
+      const m = Math.floor((ms%3600000)/60000);
+      if (h>0) return `${h}시간 ${m}분 남음`;
+      return `${m}분 남음`;
     }
 
     function renderReportedComments(){
@@ -715,12 +792,13 @@
         repCommentList.innerHTML = `<div style="opacity:.7">표시할 신고된 댓글이 없습니다.</div>`;
         return;
       }
-      repCommentList.innerHTML = reportedComments.map(rc=>`
+      const list = [...reportedComments].sort(sortReported);
+      repCommentList.innerHTML = list.map(rc=>`
         <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc(rc.commentId)}">
           <div style="font-weight:600">#${rc.markerId.slice(0,6)}… · 댓글</div>
           <div style="white-space:pre-wrap;margin-top:6px">${esc(rc.body || '')}</div>
-          ${rc.reason ? `<div class="meta">사유: ${esc(rc.reason)}</div>`:''}
-          <div class="meta">${new Date(rc.createdAt).toLocaleString()}</div>
+          <div class="meta">신고 누적: ${rc.count||0} · 숨김상태: ${msToHuman(rc.remainMs||0)}</div>
+          <div class="meta">최초 접수: ${new Date(rc.firstReportAt||Date.now()).toLocaleString()}</div>
           <div class="act">
             <button class="rbtn" data-jump>해당 핀 보기</button>
             <button class="rbtn" data-dismiss>신고 반려</button>
@@ -771,7 +849,7 @@
     function subscribeMarkers(){
       if (!firebaseOk) return;
       if (unsubMain){unsubMain();} if (unsubPending){unsubPending();}
-      markerMap.forEach(({group, marker})=> group.removeLayer(prev.marker));
+      markerMap.forEach(({group, marker})=> group.removeLayer(marker));
       markerMap.clear();
 
       const qApproved=query(collection(db,'markers'), where('status','==','approved'));
