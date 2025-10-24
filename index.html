@@ -34,6 +34,15 @@
     .hr{height:1px; background:#2a3040; margin:12px 0}
     .inp{width:100%; box-sizing:border-box; background:#1117; color:#eef; border:1px solid #303645; border-radius:10px; padding:8px}
     .row{display:flex; gap:8px; align-items:center}
+
+    /* 신고 관리 모드 전용 리스트 */
+    .rlist{display:grid; gap:8px}
+    .ritem{background:#1f2430;border:1px solid #2f3647;border-radius:10px;padding:10px}
+    .ritem .meta{font-size:12px;color:#9fb0c0;margin-top:4px}
+    .ritem .act{display:flex;gap:8px;margin-top:8px}
+    .rbtn{background:#2a2f3a;color:#fff;border:0;padding:6px 10px;border-radius:8px;cursor:pointer}
+    .rbtn.warn{background:#ff5252}
+
     /* 우하단 상세 패널 */
     #info{position:fixed; right:10px; bottom:10px; width:420px; max-height:75%;
       overflow:auto; z-index:1500; display:none; background:#1e1e1e; color:#ddd;
@@ -100,22 +109,33 @@
     <span style="width:1px;height:20px;background:#2f3545;margin:0 6px"></span>
     <button id="btnSearch" class="tbtn on">검색 모드</button>
     <button id="btnPlace"  class="tbtn">핀 배치 모드</button>
-    <!-- 상단 '신고목록' 버튼 제거됨 -->
+    <button id="btnAdminReport" class="tbtn" style="display:none">신고 관리 모드</button>
   </div>
 
-  <!-- 좌측 검색 사이드 -->
+  <!-- 좌측 사이드 -->
   <aside id="side">
-    <h3>카테고리 필터</h3>
-    <div class="flt-wrap" id="fltList"></div>
+    <!-- (A) 일반/관리자 공통: 상단 섹션은 모드에 따라 교체 표시 -->
+    <div id="sideCats">
+      <h3>카테고리 필터</h3>
+      <div class="flt-wrap" id="fltList"></div>
 
-    <h3>특수 레이어</h3>
-    <div class="flt-wrap">
-      <button id="fltWild" class="flt on">와일드 존</button>
-      <button id="fltAll" class="flt">전체 선택</button>
-      <button id="fltNone" class="flt">전체 해제</button>
-      <!-- 관리자 전용: 승인 대기 핀 & 신고 목록 -->
-      <button id="fltPending" class="flt" style="display:none">승인 대기 핀</button>
-      <button id="fltReported" class="flt" style="display:none">신고 목록</button>
+      <h3>특수 레이어</h3>
+      <div class="flt-wrap">
+        <button id="fltWild" class="flt on">와일드 존</button>
+        <button id="fltAll" class="flt">전체 선택</button>
+        <button id="fltNone" class="flt">전체 해제</button>
+        <!-- 관리자 전용: 승인 대기 핀 & 신고 목록(레이어) -->
+        <button id="fltPending" class="flt" style="display:none">승인 대기 핀</button>
+        <button id="fltReported" class="flt" style="display:none">신고 레이어</button>
+      </div>
+    </div>
+
+    <!-- (B) 신고 관리 모드: 필터 대신 신고된 댓글 목록 -->
+    <div id="sideReports" style="display:none">
+      <h3>신고된 댓글</h3>
+      <div id="repCommentList" class="rlist"></div>
+      <div class="hr"></div>
+      <div style="font-size:12px;opacity:.8">최근 48시간 내 접수·대기 중인 댓글 신고만 노출됩니다.</div>
     </div>
 
     <div class="hr"></div>
@@ -248,22 +268,15 @@
 
     // 관리자 전용 토글 상태
     let showPendingOnly = false;    // 승인 대기 핀만
-    let showReportedOnly = false;   // 신고된 핀만(숨김 적용된 핀)
-
-    function buildWildOverlays(){
-      wildLayer.clearLayers();
-      for (const z of WILD_ZONES){
-        L.imageOverlay(z.url, z.bounds, { opacity:z.opacity ?? 0.7, pane:'wildPane' }).addTo(wildLayer);
-      }
-    }
-    buildWildOverlays();
+    let showReportedOnly = false;   // (일반 모드용) 신고 레이어 토글
+    let adminReportMode = false;    // ★ 신고 관리 모드 (관리자만)
 
     /* ---------------- Firebase: 동적 import ---------------- */
     let firebaseOk = true;
     let app, auth, db, st;
     let GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged;
-    let collection, addDoc, serverTimestamp, onSnapshot,
-        orderBy, query, doc, updateDoc, deleteDoc, where, runTransaction, getDocs, getDoc, setDoc, increment;
+    let collection, collectionGroup, addDoc, serverTimestamp, onSnapshot,
+        orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment;
     let ref, getDownloadURL, uploadBytesResumable, uploadBytes;
 
     try {
@@ -287,14 +300,14 @@
       db   = fsMod.getFirestore(app);
       st   = stMod.getStorage(app);
       ({ GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } = authMod);
-      ({ collection, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, runTransaction, getDocs, getDoc, setDoc, increment } = fsMod);
+      ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment } = fsMod);
       ({ ref, getDownloadURL, uploadBytesResumable, uploadBytes } = stMod);
     } catch (e) {
       firebaseOk = false;
       console.warn("[Firebase] 동적 import 실패 — 오프라인 모드", e);
     }
 
-    /* ---------------- 업로드 유틸 (전역 바인딩) ---------------- */
+    /* ---------------- 업로드 유틸 ---------------- */
     const safeName = (name)=> name.normalize('NFKD').replace(/[^\w.\-]+/g,'_').replace(/_+/g,'_').slice(-80);
     globalThis.uploadSmart = async function uploadSmart(file, folder, onProgress, label='업로드'){
       if (!firebaseOk) throw new Error('Firebase unavailable');
@@ -368,76 +381,19 @@
     const $adminBadge = document.getElementById('adminBadge');
     const $btnPendingOnly = document.getElementById('fltPending');
     const $btnReportedOnly = document.getElementById('fltReported');
+    const $btnAdminReport = document.getElementById('btnAdminReport');
     let me=null, isAdmin=false;
 
-    // 인앱 감지/안내
-    function isInAppBrowser() {
-      const ua = navigator.userAgent || '';
-      const lc = ua.toLowerCase();
-      if (lc.includes('fbav') || lc.includes('fbios') || lc.includes('fb_iab')) return true;
-      if (lc.includes('instagram')) return true;
-      if (lc.includes('kakaotalk')) return true;
-      if (lc.includes('line')) return true;
-      if (lc.includes('naver')) return true;
-      if (lc.includes('daum')) return true;
-      if (lc.includes('wv;') || lc.includes('version/4.0 chrome/')) return true;
-      return false;
-    }
-    function openExternally() {
-      const url = location.href;
-      const isAndroid = /android/i.test(navigator.userAgent);
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-      if (isAndroid) {
-        const intent = `intent://${location.host}${location.pathname}${location.search}${location.hash}` +
-                       `#Intent;scheme=https;package=com.android.chrome;end`;
-        location.href = intent;
-      } else if (isIOS) {
-        alert('이 페이지를 chrome 혹은 Safari에서 열어 Google 로그인을 진행해주세요.\n우측 상단 ••• 메뉴 → “Safari에서 열기”를 선택하세요.');
-      } else {
-        window.open(url, '_blank', 'noopener');
-      }
-    }
-    function showInAppBlocker() {
-      const div = document.createElement('div');
-      div.style.cssText = `position:fixed; inset:0; z-index:3000; background:#000b; display:flex; align-items:center; justify-content:center;`;
-      div.innerHTML = `
-        <div style="background:#1e1e1e; color:#fff; padding:16px; border-radius:12px; width:min(420px,90%);">
-          <div style="font-weight:700; font-size:16px; margin-bottom:10px">외부 브라우저에서 열어 로그인해주세요</div>
-          <div style="opacity:.85; line-height:1.5; font-size:14px">
-            이 앱 내 브라우저(웹뷰)에선 Google 로그인이 차단됩니다.<br>
-            • Android: 아래 버튼으로 Chrome에서 열기<br>
-            • iOS: 우측 상단 메뉴 → <b>“Safari에서 열기”</b> 선택
-          </div>
-          <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap">
-            <button id="iabOpen" style="background:#3d6cff;border:0;color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer">외부 브라우저로 열기</button>
-            <button id="iabCopy" style="background:#2a2a2a;border:0;color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer">주소 복사</button>
-            <button id="iabShare" style="background:#2a2a2a;border:0;color:#fff;padding:8px 10px;border-radius:8px;cursor:pointer">공유</button>
-            <button id="iabClose" style="margin-left:auto;background:#444;border:0;color:#ddd;padding:8px 10px;border-radius:8px;cursor:pointer">닫기</button>
-          </div>
-        </div>`;
-      document.body.appendChild(div);
-      div.querySelector('#iabOpen').onclick = openExternally;
-      div.querySelector('#iabCopy').onclick = async () => {
-        try { await navigator.clipboard.writeText(location.href); alert('주소를 복사했어요. 외부 브라우저에서 붙여넣기 해주세요.'); }
-        catch { alert('복사 실패. 주소창을 길게 눌러 복사해주세요.'); }
-      };
-      div.querySelector('#iabShare').onclick = async () => {
-        if (navigator.share) { try { await navigator.share({ url: location.href, title: document.title }); } catch {} }
-        else { alert('공유 기능을 지원하지 않는 환경입니다. 주소 복사를 이용해주세요.'); }
-      };
-      div.querySelector('#iabClose').onclick = () => div.remove();
-    }
-
     $login.onclick = async (e) => {
-      if (isInAppBrowser()) { e?.preventDefault(); showInAppBlocker(); return; }
       if (!firebaseOk) { alert('네트워크 차단으로 로그인 불가'); return; }
       try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
       catch{ await signInWithRedirect(auth, new GoogleAuthProvider()); }
     };
     $logout.onclick = ()=>{ if(firebaseOk) signOut(auth); };
+
     if (firebaseOk) getRedirectResult(auth).catch(()=>{});
 
-    function resubscribe(){ subscribeMarkers(); }
+    function resubscribe(){ subscribeMarkers(); subscribeAdminReportFeeds(); }
 
     if (firebaseOk){
       onAuthStateChanged(auth, async (user)=>{
@@ -446,20 +402,24 @@
         document.getElementById('login').style.display=me?'none':'inline-block';
         document.getElementById('logout').style.display=me?'inline-block':'none';
         isAdmin=false; $adminBadge.style.display='none';
-        if ($btnPendingOnly){ $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on'); }
-        if ($btnReportedOnly){ $btnReportedOnly.style.display='none'; showReportedOnly=false; $btnReportedOnly.classList.remove('on'); }
+        $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on');
+        $btnReportedOnly.style.display='none'; showReportedOnly=false; $btnReportedOnly.classList.remove('on');
+        $btnAdminReport.style.display='none'; setAdminReportMode(false);
 
         if (me){
           onSnapshot(doc(db,'admins', me.uid), s=>{
             isAdmin = s.exists();
             $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
-            if ($btnPendingOnly) { $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none'; if (!isAdmin){ showPendingOnly=false; $btnPendingOnly.classList.remove('on'); } }
-            if ($btnReportedOnly){ $btnReportedOnly.style.display = isAdmin ? 'inline-block' : 'none'; if (!isAdmin){ showReportedOnly=false; $btnReportedOnly.classList.remove('on'); } }
+            $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
+            $btnReportedOnly.style.display = isAdmin ? 'inline-block' : 'none';
+            $btnAdminReport.style.display = isAdmin ? 'inline-block' : 'none';
             resubscribe();
           }, ()=>{
             isAdmin=false; $adminBadge.style.display='none';
-            if ($btnPendingOnly){ $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on'); }
-            if ($btnReportedOnly){ $btnReportedOnly.style.display='none'; showReportedOnly=false; $btnReportedOnly.classList.remove('on'); }
+            $btnPendingOnly.style.display='none';
+            $btnReportedOnly.style.display='none';
+            $btnAdminReport.style.display='none';
+            setAdminReportMode(false);
             resubscribe();
           });
         } else {
@@ -510,7 +470,11 @@
 
     // 좌측 필터 UI
     const side = document.getElementById('side');
+    const sideCats = document.getElementById('sideCats');
+    const sideReports = document.getElementById('sideReports');
+    const repCommentList = document.getElementById('repCommentList');
     const fltList = document.getElementById('fltList');
+
     function buildFilters(){
       fltList.innerHTML = CATEGORIES.map(c=>`<button class="flt on" data-cat="${c.key}">${c.label}</button>`).join('');
       fltList.onclick = (e)=>{
@@ -524,24 +488,35 @@
       document.getElementById('fltAll').onclick  = ()=> setAllCats(true);
       document.getElementById('fltNone').onclick = ()=> setAllCats(false);
 
-      if ($btnPendingOnly) {
-        $btnPendingOnly.onclick = ()=>{
-          if (!isAdmin) return;
-          showPendingOnly = !showPendingOnly;
-          $btnPendingOnly.classList.toggle('on', showPendingOnly);
-          applyAllVisibility(); recomputeSeqs();
-        };
-      }
-      if ($btnReportedOnly) {
-        $btnReportedOnly.onclick = ()=>{
-          if (!isAdmin) return;
-          showReportedOnly = !showReportedOnly;
-          $btnReportedOnly.classList.toggle('on', showReportedOnly);
-          applyAllVisibility(); recomputeSeqs();
-        };
-      }
+      $btnPendingOnly.onclick = ()=>{
+        if (!isAdmin) return;
+        showPendingOnly = !showPendingOnly;
+        $btnPendingOnly.classList.toggle('on', showPendingOnly);
+        applyAllVisibility(); recomputeSeqs();
+      };
+      $btnReportedOnly.onclick = ()=>{
+        if (!isAdmin) return;
+        showReportedOnly = !showReportedOnly;
+        $btnReportedOnly.classList.toggle('on', showReportedOnly);
+        applyAllVisibility(); recomputeSeqs();
+      };
+
+      $btnAdminReport.onclick = ()=>{
+        if (!isAdmin) return;
+        setAdminReportMode(!adminReportMode);
+      };
     }
     buildFilters();
+
+    function setAdminReportMode(v){
+      adminReportMode = !!v;
+      side.style.display = 'block';
+      sideCats.style.display = adminReportMode ? 'none' : 'block';
+      sideReports.style.display = adminReportMode ? 'block' : 'none';
+      document.getElementById('btnAdminReport').classList.toggle('on', adminReportMode);
+      applyAllVisibility();
+      recomputeSeqs();
+    }
 
     /* ---------------- 통합 검색(제목/본문) + 랭킹 ---------------- */
     const qInput   = document.getElementById('qInput');
@@ -601,6 +576,148 @@
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
+    /* ---------------- 신고 피드(관리자 모드용) ---------------- */
+    let reportedMarkerSet = new Set(); // 최근 48h 내 marker pending 신고 존재
+    let reportedComments = [];        // {markerId, commentId, body?, reason?, createdAt}
+
+    let unsubRepMarkers = null;
+    let unsubRepComments = null;
+
+    function within48h(ts){
+      const ms = toMs(ts);
+      if (!ms) return true;
+      return (nowMs() - ms) <= HIDE_MS;
+    }
+
+    function subscribeAdminReportFeeds(){
+      if (!firebaseOk || !isAdmin){
+        reportedMarkerSet = new Set();
+        reportedComments = [];
+        renderReportedComments();
+        applyAllVisibility();
+        if (unsubRepMarkers){unsubRepMarkers(); unsubRepMarkers=null;}
+        if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
+        return;
+      }
+      // 신고된 마커 (collectionGroup: reports) pending & type:marker
+      if (unsubRepMarkers){unsubRepMarkers(); unsubRepMarkers=null;}
+      const qRM = query(collectionGroup(db,'reports'), where('status','==','pending'));
+      unsubRepMarkers = onSnapshot(qRM, snap=>{
+        const next = new Set();
+        snap.forEach(d=>{
+          const data = d.data()||{};
+          // type==='marker' 이거나 경로가 markers/{id}/reports/{rid}
+          const path = d.ref.path.split('/');
+          const isMarkerReport = data.type==='marker' || (path[0]==='markers' && path[2]==='reports');
+          if (!isMarkerReport) return;
+          if (!within48h(data.createdAt)) return;
+          const markerId = (path[0]==='markers') ? path[1] : (data.markerId || null);
+          if (markerId) next.add(markerId);
+        });
+        reportedMarkerSet = next;
+        applyAllVisibility();
+        recomputeSeqs();
+      });
+
+      // 신고된 댓글 (collectionGroup: reports) pending & type:comment
+      if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
+      const qRC = query(collectionGroup(db,'reports'), where('status','==','pending'));
+      unsubRepComments = onSnapshot(qRC, async snap=>{
+        const items = [];
+        const fetches = [];
+        snap.forEach(d=>{
+          const data = d.data()||{};
+          const path = d.ref.path.split('/'); // markers/{m}/comments/{c}/reports/{r} 또는 기타
+          const isCommentReport = data.type==='comment' || (path.length>=6 && path[2]==='comments' && path[4]==='reports');
+          if (!isCommentReport) return;
+          if (!within48h(data.createdAt)) return;
+          const markerId = (path[0]==='markers') ? path[1] : (data.markerId || null);
+          const commentId= (path[2]==='comments') ? path[3] : (data.commentId || null);
+          if (!markerId || !commentId) return;
+
+          const item = {
+            id: d.id, markerId, commentId,
+            reason: data.reason || '',
+            createdAt: toMs(data.createdAt) || Date.now(),
+            body: '(불러오는 중…)'
+          };
+          items.push(item);
+
+          // 댓글 본문 조회
+          if (firebaseOk){
+            fetches.push(getDoc(doc(db,'markers', markerId, 'comments', commentId)).then(cs=>{
+              if (cs.exists()){
+                item.body = cs.data()?.body || '(본문 없음)';
+              }else{
+                item.body = '(삭제됨)';
+              }
+            }).catch(()=>{ item.body='(로드 실패)'; }));
+          }
+        });
+        await Promise.all(fetches);
+        // 최신순 정렬
+        reportedComments = items.sort((a,b)=>b.createdAt - a.createdAt);
+        renderReportedComments();
+      }, err=> console.warn('[reported comments]', err));
+    }
+
+    function renderReportedComments(){
+      if (!adminReportMode){
+        repCommentList.innerHTML='';
+        return;
+      }
+      if (!reportedComments.length){
+        repCommentList.innerHTML = `<div style="opacity:.7">표시할 신고된 댓글이 없습니다.</div>`;
+        return;
+      }
+      repCommentList.innerHTML = reportedComments.map(rc=>`
+        <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc(rc.commentId)}">
+          <div style="font-weight:600">#${rc.markerId.slice(0,6)}… · 댓글</div>
+          <div style="white-space:pre-wrap;margin-top:6px">${esc(rc.body || '')}</div>
+          ${rc.reason ? `<div class="meta">사유: ${esc(rc.reason)}</div>`:''}
+          <div class="meta">${new Date(rc.createdAt).toLocaleString()}</div>
+          <div class="act">
+            <button class="rbtn" data-jump>해당 핀 보기</button>
+            <button class="rbtn" data-dismiss>신고 반려</button>
+          </div>
+        </div>
+      `).join('');
+
+      repCommentList.onclick = async (e)=>{
+        const card = e.target.closest('.ritem'); if (!card) return;
+        const markerId = card.getAttribute('data-mid');
+        const commentId= card.getAttribute('data-cid');
+
+        if (e.target.matches('[data-jump]')){
+          // 해당 핀 열고 댓글로 스크롤
+          const rec = markerMap.get(markerId);
+          if (rec){
+            openInfoWithSeq(rec.data);
+            // 댓글 로딩 후 해당 댓글로 스크롤
+            setTimeout(()=>{
+              const el = document.getElementById('c-'+commentId);
+              if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+            }, 400);
+          }else{
+            alert('해당 핀을 지도에서 찾을 수 없습니다.');
+          }
+          return;
+        }
+        if (e.target.matches('[data-dismiss]')){
+          try{
+            // 해당 댓글의 pending report 모두 반려 + 댓글 숨김 해제
+            const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
+            const s = await getDocs(q);
+            await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
+            await updateDoc(doc(db,'markers', markerId, 'comments', commentId), { hiddenUntil: null });
+            alert('해당 댓글 신고를 반려했습니다.');
+          }catch(err){
+            alert('반려 처리 실패: ' + (err?.message||err));
+          }
+        }
+      };
+    }
+
     /* ---------------- 마커 구독/렌더 ---------------- */
     const markerMap=new Map(); // id -> {group, marker, data, seq}
     let unsubMain=null, unsubPending=null;
@@ -618,19 +735,11 @@
       });
 
       if (isAdmin){
-        try{
-          const qPending=query(collection(db,'markers'), where('status','==','pending'), orderBy('createdAt','desc'));
-          unsubPending=onSnapshot(qPending, s=>{
-            s.docChanges().forEach(renderChange);
-            recomputeSeqs();
-          });
-        }catch{
-          const qPending=query(collection(db,'markers'), where('status','==','pending'));
-          unsubPending=onSnapshot(qPending, s=>{
-            s.docChanges().forEach(renderChange);
-            recomputeSeqs();
-          });
-        }
+        const qPending=query(collection(db,'markers'), where('status','==','pending'));
+        unsubPending=onSnapshot(qPending, s=>{
+          s.docChanges().forEach(renderChange);
+          recomputeSeqs();
+        });
       }
     }
 
@@ -659,11 +768,24 @@
     }
 
     function isHiddenByReport(m){ return toMs(m.hiddenUntil) > nowMs(); }
+    function isReportedPin(m){
+      // 신고 관리 모드에서 보일 핀 판단: 최근 48h 신고가 있거나(hiddenUntil) pending report set에 포함
+      return isHiddenByReport(m) || reportedMarkerSet.has(m.id);
+    }
 
     function applyVisibility(id){
       const rec = markerMap.get(id);
       if (!rec) return;
       const {group, marker, data:m} = rec;
+
+      // 신고 관리 모드: 신고된 핀만
+      if (adminReportMode){
+        const ok = isAdmin && isReportedPin(m);
+        if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
+        else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
+        return;
+      }
+
       const catOn = catVisible.get(m.category) !== false;
       const hiddenForUser = isHiddenByReport(m) && !isAdmin;
       const txtOk = matchText(m);
@@ -671,11 +793,9 @@
       // 기본 승인 상태 필터
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
 
-      // 관리자 '신고 목록' 토글: 숨김 적용된 핀만 보기
+      // (일반 모드) 신고 레이어: 숨김 적용된 핀만 보기 (관리자 시)
       const isHidden = isHiddenByReport(m);
-      const reportedOk = isAdmin
-        ? (showReportedOnly ? isHidden : true)
-        : true;
+      const reportedOk = isAdmin ? (showReportedOnly ? isHidden : true) : true;
 
       const ok = catOn && !hiddenForUser && txtOk && statusOk && reportedOk;
       if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
@@ -717,6 +837,7 @@
     /* ---------- 동적 시퀀스(고유번호) 재계산 ---------- */
     function visibleForSeq(m){
       if (!m) return false;
+      if (adminReportMode) return isAdmin && isReportedPin(m);
       if (isHiddenByReport(m) && !isAdmin) return false;
       if (catVisible.get(m.category) === false) return false;
       if (!matchText(m)) return false;
@@ -861,7 +982,6 @@
     }
 
     async function adminDismissAllReports(markerId){
-      // 신고 반려: 해당 핀의 pending 리포트를 모두 'rejected'로 바꾸고 hiddenUntil 초기화
       try{
         const qR = query(collection(db,'markers', markerId, 'reports'), where('status','==','pending'));
         const snap = await getDocs(qR);
@@ -920,7 +1040,7 @@
 
       const isMine = me && me.uid===m.authorUid;
       const canEdit = isMine && (m.status==='pending'||m.status===undefined);
-      const isReported = isHiddenByReport(m); // 신고로 인해 숨김 적용된 경우를 '신고됨'으로 간주
+      const isReported = isReportedPin(m);
 
       $infoBtns.innerHTML = `
         <button id="btnReport" class="primary">핀 신고</button>
@@ -1007,7 +1127,6 @@
         try{
           await adminDismissAllReports(m.id);
           alert('신고가 반려되었습니다. 숨김이 해제됩니다.');
-          // 로컬 상태 반영
           const rec = markerMap.get(m.id);
           if (rec){ rec.data.hiddenUntil = null; applyVisibility(m.id); recomputeSeqs(); }
         }catch(e){
@@ -1033,7 +1152,7 @@
       mode=m;
       btnSearch.classList.toggle('on', m==='search');
       btnPlace.classList.toggle('on',  m==='place');
-      side.style.display = (m==='search') ? 'block':'none';
+      if (!adminReportMode) side.style.display = (m==='search') ? 'block':'none';
     }
     btnSearch.onclick=()=> setMode('search');
     btnPlace.onclick =()=> {
@@ -1068,7 +1187,6 @@
     pkAddBtn.onclick = addPk;
     pkAddInput.addEventListener('keydown', e=>{ if(e.key==='Enter') addPk(); });
     pkAddClear.onclick = ()=>{ pkList=[]; redrawPkChips(); };
-    pkChips.onclick = e=>{ const t=e.target.closest('.tag'); if(!t) return; const i=+t.getAttribute('data-i'); pkList.splice(i,1); redrawPkChips(); };
 
     const pokemonCats = ['와일드 존','우두머리 포켓몬','메가 포켓몬'];
     catSel.addEventListener('change', ()=>{ pkEditor.style.display = pokemonCats.includes(catSel.value) ? 'block' : 'none'; });
