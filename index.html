@@ -61,7 +61,7 @@
     #info .media img{width:100%; max-height:260px; object-fit:cover}
     #info .idtag{background:#263238; color:#cfd8dc; padding:2px 6px; border-radius:6px; font-size:11px}
     .pk-tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
-    .pk-tags .tag{background:#223; border:1px solid #345; color:#cfe; padding:2px 8px; border-radius:999px; font-size:12px}
+    .pk-tags .tag{background:#223; border:1px solid #345; color:#cfe; padding:2px 8px; border-radius:999px; font-size:12px; cursor:pointer}
     /* 본문 아래 캐러셀 */
     .carousel{ position:relative; width:100%; margin-top:12px; background:#141414; border-radius:10px; overflow:hidden }
     .carousel .inner{ display:flex; transition: transform .3s ease }
@@ -128,7 +128,6 @@
         <button id="fltNone" class="flt">전체 해제</button>
         <!-- 관리자 전용: 승인 대기 핀 -->
         <button id="fltPending" class="flt" style="display:none">승인 대기 핀</button>
-        <!-- (요청대로 '신고 레이어' 버튼은 제거) -->
       </div>
     </div>
 
@@ -143,7 +142,7 @@
       </div>
       <div id="repCommentList" class="rlist"></div>
       <div class="hr"></div>
-      <div style="font-size:12px;opacity:.8">최근 48시간 내 접수·대기 중인 댓글 신고만 노출됩니다.</div>
+      <div style="font-size:12px;opacity:.8">현재 숨김 처리된 댓글만 표시합니다.</div>
     </div>
 
     <div class="hr"></div>
@@ -276,7 +275,7 @@
 
     // 관리자 전용 토글 상태
     let showPendingOnly = false;    // 승인 대기 핀만
-    let adminReportMode = false;    // ★ 신고 관리 모드 (관리자만)
+    let adminReportMode = false;    // 신고 관리 모드 (관리자만)
 
     /* ---------------- Firebase: 동적 import ---------------- */
     let firebaseOk = true;
@@ -390,7 +389,7 @@
     const $btnAdminReport = document.getElementById('btnAdminReport');
     let me=null, isAdmin=false;
 
-    $login.onclick = async (e) => {
+    $login.onclick = async () => {
       if (!firebaseOk) { alert('네트워크 차단으로 로그인 불가'); return; }
       try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
       catch{ await signInWithRedirect(auth, new GoogleAuthProvider()); }
@@ -399,7 +398,7 @@
 
     if (firebaseOk) getRedirectResult(auth).catch(()=>{});
 
-    function resubscribe(){ subscribeMarkers(); subscribeAdminReportFeeds(); }
+    function resubscribe(){ subscribeMarkers(); subscribeReportedCommentsAdmin(); }
 
     if (firebaseOk){
       onAuthStateChanged(auth, async (user)=>{
@@ -464,6 +463,10 @@
       recomputeSeqs();
     }
     function setAllCats(v){ CATEGORIES.forEach(c=> setCategoryVisible(c.key, v)); }
+    function setOnlyPokemonCats(){
+      setAllCats(false);
+      ['와일드 존','우두머리 포켓몬','메가 포켓몬'].forEach(k=> setCategoryVisible(k, true));
+    }
     function setWildVisible(v){
       wildVisible = v;
       if (v){ if (!map.hasLayer(wildLayer)) wildLayer.addTo(map); }
@@ -582,157 +585,16 @@
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
-    /* ---------------- 신고 피드(관리자 모드용) ---------------- */
-    let reportedMarkerSet = new Set(); // 최근 48h 내 marker pending 신고 존재
-    // 신고된 댓글: { markerId, commentId, body, reason?, createdAt(첫 신고시점, firstReportAt), count, remainMs }
-    let reportedComments = [];
-
-    let unsubRepMarkers = null;
+    /* ---------------- 신고된 댓글: 숨김 상태 직접 구독 ---------------- */
+    let reportedComments = []; // { markerId, commentId, body, remainMs, firstReportAt, count }
     let unsubRepComments = null;
-
-    function within48h(ts){
-      const ms = toMs(ts);
-      if (!ms) return true;
-      return (nowMs() - ms) <= HIDE_MS;
-    }
-
-    function clearReportFeeds(){
-      reportedMarkerSet = new Set();
-      reportedComments = [];
-      renderReportedComments();
-      applyAllVisibility();
-      if (unsubRepMarkers){unsubRepMarkers(); unsubRepMarkers=null;}
-      if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
-    }
-
-    function subscribeAdminReportFeeds(){
-      if (!firebaseOk || !isAdmin){
-        clearReportFeeds();
-        return;
-      }
-
-      // --- 1) 신고된 마커: reports 그룹(pending) 구독
-      if (unsubRepMarkers){unsubRepMarkers(); unsubRepMarkers=null;}
-      const qRM = query(collectionGroup(db,'reports'), where('status','==','pending'));
-      unsubRepMarkers = onSnapshot(qRM, snap=>{
-        const next = new Set();
-        snap.forEach(d=>{
-          const data = d.data()||{};
-          const path = d.ref.path.split('/'); // markers/{m}/reports/{r} | markers/{m}/comments/{c}/reports/{r}
-          const isMarkerReport = data.type==='marker' || (path[0]==='markers' && path[2]==='reports');
-          if (!isMarkerReport) return;
-          if (!within48h(data.createdAt)) return;
-          const markerId = (path[0]==='markers') ? path[1] : (data.markerId || null);
-          if (markerId) next.add(markerId);
-        });
-        reportedMarkerSet = next;
-        applyAllVisibility();
-        recomputeSeqs();
-      }, err=>{
-        console.warn('[reported markers] collectionGroup error', err);
-      });
-
-      // --- 2) 신고된 댓글 집계
-      if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
-      const qRC = query(collectionGroup(db,'reports'), where('status','==','pending'));
-      unsubRepComments = onSnapshot(qRC, async snap=>{
-        try{
-          // 2-1. report 문서 → 댓글 단위로 집계
-          const agg = new Map(); // key: m|c → { markerId, commentId, count, firstReportAt }
-          snap.forEach(d=>{
-            const data = d.data()||{};
-            const path = d.ref.path.split('/');
-            const isCommentReport = data.type==='comment' || (path.length>=6 && path[2]==='comments' && path[4]==='reports');
-            if (!isCommentReport) return;
-            if (!within48h(data.createdAt)) return;
-
-            const markerId = (path[0]==='markers') ? path[1] : (data.markerId || null);
-            const commentId= (path[2]==='comments') ? path[3] : (data.commentId || null);
-            if (!markerId || !commentId) return;
-
-            const key = `${markerId}|${commentId}`;
-            const createdMs = toMs(data.createdAt) || Date.now();
-            const cur = agg.get(key) || { markerId, commentId, count:0, firstReportAt: createdMs };
-            cur.count += 1;
-            if (createdMs < cur.firstReportAt) cur.firstReportAt = createdMs;
-            agg.set(key, cur);
-          });
-
-          // 2-2. 댓글 본문/숨김상태 읽기
-          const items = [];
-          const fetches = [];
-          for (const ent of agg.values()){
-            const item = { ...ent, body:'(불러오는 중…)', remainMs:0, reason:'' };
-            items.push(item);
-            fetches.push(
-              getDoc(doc(db,'markers', ent.markerId, 'comments', ent.commentId))
-                .then(cs=>{
-                  if (!cs.exists()){ item.body='(삭제됨)'; return; }
-                  const cd = cs.data()||{};
-                  item.body = cd.body || '(본문 없음)';
-                  const hu = toMs(cd.hiddenUntil) || 0;
-                  const remain = Math.max(0, hu - nowMs());
-                  item.remainMs = remain;
-                })
-                .catch(()=>{ item.body='(로드 실패)'; })
-            );
-          }
-          await Promise.all(fetches);
-
-          // 2-3. 정렬 및 그리기
-          reportedComments = items.sort(sortReported);
-          renderReportedComments();
-        }catch(err){
-          console.warn('[reported comments aggregate] error → fallback', err);
-          await subscribeReportedCommentsFallback();
-        }
-      }, async err=>{
-        console.warn('[reported comments] collectionGroup error', err);
-        await subscribeReportedCommentsFallback();
-      });
-    }
-
-    // 폴백: 숨김 적용된 댓글(hiddenUntil > now)을 그룹쿼리로 수집 (count=1, firstReportAt ≈ hiddenUntil - 48h)
-    async function subscribeReportedCommentsFallback(){
-      try{
-        const qHidden = query(collectionGroup(db,'comments'), where('hiddenUntil','>', new Date()));
-        const snap = await getDocs(qHidden);
-        const items = [];
-        const now = nowMs();
-        snap.forEach(d=>{
-          const path = d.ref.path.split('/'); // markers/{m}/comments/{c}
-          if (!(path[0]==='markers' && path[2]==='comments')) return;
-          const markerId = path[1];
-          const commentId= path[3];
-          const data = d.data()||{};
-          const hu = toMs(data.hiddenUntil) || 0;
-          if (!hu) return;
-          const remain = Math.max(0, hu - now);
-          const approxCreated = hu - HIDE_MS; // 대략 48시간 전을 최초 신고시점으로 가정
-
-          items.push({
-            markerId, commentId,
-            body: data.body || '(본문 없음)',
-            count: 1,
-            remainMs: remain,
-            firstReportAt: approxCreated
-          });
-        });
-        reportedComments = items.sort(sortReported);
-        renderReportedComments();
-      }catch(err){
-        console.warn('[fallback comments] error', err);
-        reportedComments = [];
-        renderReportedComments();
-      }
-    }
 
     function sortReported(a,b){
       const now = nowMs();
       if (repSortMode==='count'){
         if (b.count!==a.count) return b.count - a.count;
         if (b.remainMs!==a.remainMs) return b.remainMs - a.remainMs;
-        return a.firstReportAt - b.firstReportAt; // 오래된 순
+        return a.firstReportAt - b.firstReportAt;
       }
       if (repSortMode==='remain'){
         if (b.remainMs!==a.remainMs) return b.remainMs - a.remainMs;
@@ -740,25 +602,22 @@
         return a.firstReportAt - b.firstReportAt;
       }
       if (repSortMode==='oldest'){
-        if (a.firstReportAt!==b.firstReportAt) return a.firstReportAt - b.firstReportAt; // 오래된 순
+        if (a.firstReportAt!==b.firstReportAt) return a.firstReportAt - b.firstReportAt;
         if (b.count!==a.count) return b.count - a.count;
         return b.remainMs - a.remainMs;
       }
-      // 종합(가중치): count 0.5, remain 0.3, 오래됨 0.2
+      // 종합 가중치
       const maxCount = Math.max(1, ...reportedComments.map(x=>x.count||1));
       const maxRemain= Math.max(1, ...reportedComments.map(x=>x.remainMs||0), 1);
       const maxAge   = Math.max(1, ...reportedComments.map(x=> (now - (x.firstReportAt||now)) ), 1);
-
       const score = (x)=>{
-        const c = (x.count||0) / maxCount;
+        const c = (x.count||1) / maxCount;
         const r = (x.remainMs||0) / maxRemain;
-        const ageMs = now - (x.firstReportAt||now);
-        const o = ageMs / maxAge; // 오래된 게 높게
+        const o = (now - (x.firstReportAt||now)) / maxAge;
         return 0.5*c + 0.3*r + 0.2*o;
       };
-      const sb = score(b) - score(a);
-      if (sb!==0) return sb;
-      // 동점시 보조 정렬
+      const diff = score(b) - score(a);
+      if (diff!==0) return diff;
       if (b.count!==a.count) return b.count - a.count;
       if (b.remainMs!==a.remainMs) return b.remainMs - a.remainMs;
       return a.firstReportAt - b.firstReportAt;
@@ -773,21 +632,22 @@
     }
 
     function renderReportedComments(){
+      const repCommentList = document.getElementById('repCommentList');
       if (!adminReportMode){
         repCommentList.innerHTML='';
         return;
       }
       if (!reportedComments.length){
-        repCommentList.innerHTML = `<div style="opacity:.7">표시할 신고된 댓글이 없습니다.</div>`;
+        repCommentList.innerHTML = `<div style="opacity:.7">숨김 처리된 댓글이 없습니다.</div>`;
         return;
       }
       const list = [...reportedComments].sort(sortReported);
       repCommentList.innerHTML = list.map(rc=>`
-        <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc(rc.commentId)}">
+        <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc.commentId)}">
           <div style="font-weight:600">#${rc.markerId.slice(0,6)}… · 댓글</div>
           <div style="white-space:pre-wrap;margin-top:6px">${esc(rc.body || '')}</div>
-          <div class="meta">신고 누적: ${rc.count||0} · 숨김상태: ${msToHuman(rc.remainMs||0)}</div>
-          <div class="meta">최초 접수: ${new Date(rc.firstReportAt||Date.now()).toLocaleString()}</div>
+          <div class="meta">임시 숨김: ${msToHuman(rc.remainMs||0)}</div>
+          <div class="meta">최초 접수(추정): ${new Date(rc.firstReportAt||Date.now()).toLocaleString()}</div>
           <div class="act">
             <button class="rbtn" data-jump>해당 핀 보기</button>
             <button class="rbtn" data-dismiss>신고 반려</button>
@@ -816,19 +676,51 @@
 
         if (e.target.matches('[data-dismiss]')){
           try{
-            // 보고서가 안보이는 환경도 고려: 1) 보이는 report는 rejected, 2) 숨김 해제
-            try{
-              const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
-              const s = await getDocs(q);
-              await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
-            }catch(_e){ /* 무시 */ }
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), { hiddenUntil: null });
-            alert('해당 댓글 신고를 반려했습니다.');
+            alert('숨김을 해제했습니다.');
           }catch(err){
             alert('반려 처리 실패: ' + (err?.message||err));
           }
         }
       };
+    }
+
+    function subscribeReportedCommentsAdmin(){
+      // 관리자만 사용, 숨김 상태의 댓글 실시간 구독
+      if (unsubRepComments){unsubRepComments();unsubRepComments=null;}
+      if (!firebaseOk || !isAdmin){
+        reportedComments = [];
+        renderReportedComments();
+        return;
+      }
+      const qHidden = query(collectionGroup(db,'comments'), where('hiddenUntil','>', new Date()));
+      unsubRepComments = onSnapshot(qHidden, snap=>{
+        const now = nowMs();
+        const items = [];
+        snap.forEach(d=>{
+          const path = d.ref.path.split('/'); // markers/{m}/comments/{c}
+          if (!(path[0]==='markers' && path[2]==='comments')) return;
+          const markerId = path[1];
+          const commentId= path[3];
+          const data = d.data()||{};
+          if (data.deleted) return;
+          const hu = toMs(data.hiddenUntil) || 0;
+          if (!hu || hu<=now) return;
+          items.push({
+            markerId, commentId,
+            body: data.body || '(본문 없음)',
+            remainMs: hu - now,
+            firstReportAt: hu - HIDE_MS,
+            count: 1 // 보고 수는 알 수 없으므로 1로 표기(숨김 기준)
+          });
+        });
+        reportedComments = items;
+        renderReportedComments();
+      }, err=>{
+        console.warn('[reported comments subscribe] error', err);
+        reportedComments = [];
+        renderReportedComments();
+      });
     }
 
     /* ---------------- 마커 구독/렌더 ---------------- */
@@ -881,19 +773,14 @@
     }
 
     function isHiddenByReport(m){ return toMs(m.hiddenUntil) > nowMs(); }
-    function isReportedPin(m){
-      // 신고 관리 모드에서 보일 핀 판단: 최근 48h 신고가 있거나(hiddenUntil) pending report set에 포함
-      return isHiddenByReport(m) || reportedMarkerSet.has(m.id);
-    }
-
     function applyVisibility(id){
       const rec = markerMap.get(id);
       if (!rec) return;
       const {group, marker, data:m} = rec;
 
-      // 신고 관리 모드: 신고된 핀만
       if (adminReportMode){
-        const ok = isAdmin && isReportedPin(m);
+        // 신고 모드에서는 숨김/신고된 핀만 보여주고 싶다면 여기 조건을 조정하세요.
+        const ok = isHiddenByReport(m); // 핀 자체가 숨김 상태면 우선 표시
         if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
         else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
         return;
@@ -902,8 +789,6 @@
       const catOn = catVisible.get(m.category) !== false;
       const hiddenForUser = isHiddenByReport(m) && !isAdmin;
       const txtOk = matchText(m);
-
-      // 기본 승인 상태 필터
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
 
       const ok = catOn && !hiddenForUser && txtOk && statusOk;
@@ -917,19 +802,14 @@
 
     async function reportMarker(m, reason){
       if (!firebaseOk) return { ok:false, hid:false };
-
+      // 신고는 기록 + 임시 숨김만 확실히 적용
       try{
-        const rep = {
+        await addDoc(collection(db,'markers', m.id, 'reports'), {
           type:'marker', markerId: m.id, commentId: null,
           uid: me?.uid || null, reason,
           status:'pending', createdAt: serverTimestamp()
-        };
-        await addDoc(collection(db,'markers', m.id, 'reports'), rep);
-      }catch(err){
-        console.error('[report:addDoc] 실패', err);
-        throw err;
-      }
-
+        });
+      }catch(_e){ /* 저장 실패해도 숨김만 가도 무방 */ }
       let hidApplied = false;
       try{
         const until = new Date(Date.now() + HIDE_MS);
@@ -937,16 +817,14 @@
         const rec = markerMap.get(m.id);
         if (rec){ rec.data.hiddenUntil = until; applyVisibility(m.id); recomputeSeqs(); }
         hidApplied = true;
-      }catch(err){
-        console.warn('[report:update hiddenUntil] 권한 부족 또는 실패 — 숨김 미적용', err);
-      }
+      }catch(_e){}
       return { ok:true, hid:hidApplied };
     }
 
     /* ---------- 동적 시퀀스(고유번호) 재계산 ---------- */
     function visibleForSeq(m){
       if (!m) return false;
-      if (adminReportMode) return isAdmin && isReportedPin(m);
+      if (adminReportMode) return isHiddenByReport(m);
       if (isHiddenByReport(m) && !isAdmin) return false;
       if (catVisible.get(m.category) === false) return false;
       if (!matchText(m)) return false;
@@ -1028,7 +906,7 @@
         snap.forEach(d=>{
           const c = { id:d.id, ...d.data() };
           const hidden = c.hiddenUntil ? (toMs(c.hiddenUntil) > now) : false;
-          if (c.deleted) return; if (hidden) return;   // ← 신고 시 '임시 숨김'만 적용, 삭제 아님
+          if (c.deleted) return; if (hidden) return;   // 신고 시 '임시 숨김'
           items.push(c);
         });
         $cList.innerHTML = items.map(c => `
@@ -1046,17 +924,18 @@
             if (!me){ alert('로그인이 필요합니다'); return; }
             const cid = btn.getAttribute('data-crep');
             const reason = prompt('댓글 신고 사유를 입력해주세요'); if (!reason) return;
-            const rep = { type:'comment', markerId: marker.id, commentId: cid, uid: me.uid, reason,
-                          status:'pending', createdAt: serverTimestamp() };
-            await addDoc(collection(db,'markers', marker.id, 'comments', cid, 'reports'), rep);
-            await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { hiddenUntil: new Date(Date.now()+HIDE_MS) }); // ← 48h 임시 숨김
+            await addDoc(collection(db,'markers', marker.id, 'comments', cid, 'reports'), {
+              type:'comment', markerId: marker.id, commentId: cid, uid: me.uid, reason,
+              status:'pending', createdAt: serverTimestamp()
+            });
+            await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { hiddenUntil: new Date(Date.now()+HIDE_MS) });
             alert('신고가 접수되었습니다.');
           };
         });
         $cList.querySelectorAll('[data-cdel]').forEach(btn=>{
           btn.onclick = async ()=>{
             const cid = btn.getAttribute('data-cdel');
-            if (!confirm('댓글을 삭제할까요?')) return;   // ← 삭제는 별도 동작(작성자/관리자만)
+            if (!confirm('댓글을 삭제할까요?')) return;
             await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { deleted:true });
           };
         });
@@ -1088,23 +967,6 @@
       openInfo(m, seqNum);
     }
 
-    async function adminDismissAllReports(markerId){
-      try{
-        const qR = query(collection(db,'markers', markerId, 'reports'), where('status','==','pending'));
-        const snap = await getDocs(qR);
-        const updates=[];
-        snap.forEach(d=> updates.push(updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
-        await Promise.all(updates);
-      }catch(e){
-        console.warn('[신고 반려] report 업데이트 실패', e);
-      }
-      try{
-        await updateDoc(doc(db,'markers', markerId), { hiddenUntil: null });
-      }catch(e){
-        console.warn('[신고 반려] hiddenUntil 초기화 실패', e);
-      }
-    }
-
     async function adminEditOrDelete(marker){
       const choice = prompt('관리자 작업을 선택하세요: edit / delete', 'edit');
       if (!choice) return;
@@ -1130,14 +992,6 @@
 
     function openInfo(m, seqNum){
       currentOpenId=m.id;
-      const $infoTitle=document.getElementById('infoTitle');
-      const $infoId=document.getElementById('infoId');
-      const $infoMeta=document.getElementById('infoMeta');
-      const $infoBody=document.getElementById('infoBody');
-      const $infoMediaTop=document.getElementById('infoMediaTop');
-      const $infoBtns=document.getElementById('infoBtns');
-      const $infoPk=document.getElementById('infoPk');
-
       $infoTitle.textContent=m.title||'(제목 없음)';
       $infoId.textContent = seqNum ? '#'+seqNum : '#-';
       const statusText = m.status || 'pending';
@@ -1145,17 +999,26 @@
       $infoMediaTop.innerHTML = mediaTopEl(m);
       $infoBody.textContent = m.body||'';
 
-      const pkCats = ['와일드 존','우두머리 포켓몬','메가 포켓몬'];
-      if (pkCats.includes(m.category) && Array.isArray(m.pokemon) && m.pokemon.length){
+      const pokemonCats = ['와일드 존','우두머리 포켓몬','메가 포켓몬'];
+      if (pokemonCats.includes(m.category) && Array.isArray(m.pokemon) && m.pokemon.length){
         $infoPk.style.display='flex';
-        $infoPk.innerHTML = m.pokemon.map(n=>`<span class="tag">${esc(n)}</span>`).join('');
+        $infoPk.innerHTML = m.pokemon.map(n=>`<span class="tag" data-pk="${esc(n)}">${esc(n)}</span>`).join('');
+        // ★ 포켓몬 태그 클릭 → 해당 포켓몬 보고 핀만 표시
+        $infoPk.onclick = (e)=>{
+          const t = e.target.closest('.tag[data-pk]'); if(!t) return;
+          const name = t.getAttribute('data-pk');
+          document.getElementById('qInput').value = name;
+          setOnlyPokemonCats();
+          applyTextFilter(name);
+          alert(`"${name}" 출현 보고 핀만 표시합니다. (와일드/우두머리/메가)`);
+        };
       } else { $infoPk.style.display='none'; $infoPk.innerHTML=''; }
 
       buildCarousel(m.media || []);
 
       const isMine = me && me.uid===m.authorUid;
       const canEdit = isMine && (m.status==='pending'||m.status===undefined);
-      const isReported = isReportedPin(m);
+      const hiddenNow = isHiddenByReport(m);
 
       $infoBtns.innerHTML = `
         <button id="btnReport" class="primary">핀 신고</button>
@@ -1165,10 +1028,7 @@
               ? `<button id="btnAppr" class="primary">승인</button><button id="btnReject" class="warn">반려</button>`
               : ``}
             <button id="btnAdminDel" class="warn">관리자 삭제</button>
-            ${isReported ? `
-              <button id="btnAdminEditCombo">삭제 및 수정</button>
-              <button id="btnReportDismiss">신고 반려</button>
-            ` : ``}
+            ${hiddenNow ? `<button id="btnReportDismiss">신고 반려(숨김 해제)</button>`:''}
           ` : ``}
       `;
 
@@ -1177,19 +1037,17 @@
         if (!me){ alert('로그인이 필요합니다'); return; }
         const reason = prompt('신고 사유를 입력해주세요'); if(!reason) return;
         try{
-          const r = await reportMarker(m, reason);
-          if (r.ok){
-            alert(r.hid ? '신고가 접수되었습니다. (임시 숨김 적용)' : '신고가 접수되었습니다. (권한 제한으로 즉시 숨김은 미적용)');
-            $info.style.display='none'; currentOpenId=null;
-          }
-        }catch(err){
-          const msg = err?.message || String(err);
-          if (/permission|insufficient/i.test(msg)){
-            alert('신고 저장 권한이 없어 접수에 실패했습니다.\n(로그인 상태 및 Firestore 규칙을 확인해주세요)');
-          }else{
-            alert('신고 처리 중 오류: ' + msg);
-          }
-        }
+          const until = new Date(Date.now() + HIDE_MS);
+          await addDoc(collection(db,'markers', m.id, 'reports'), {
+            type:'marker', markerId: m.id, uid: me.uid, reason,
+            status:'pending', createdAt: serverTimestamp()
+          });
+          await updateDoc(doc(db,'markers', m.id), { hiddenUntil: until });
+          const rec = markerMap.get(m.id);
+          if (rec){ rec.data.hiddenUntil = until; applyVisibility(m.id); }
+          alert('신고가 접수되었습니다. (임시 숨김 적용)');
+          $info.style.display='none'; currentOpenId=null;
+        }catch(err){ alert('신고 처리 중 오류: ' + (err?.message||err)); }
       };
 
       const btnE=document.getElementById('btnEdit');
@@ -1232,22 +1090,15 @@
         finally{ btnRe.disabled=false; btnRe.textContent='반려'; }
       };
 
-      const btnAdminEditCombo = document.getElementById('btnAdminEditCombo');
-      if (btnAdminEditCombo) btnAdminEditCombo.onclick = ()=> adminEditOrDelete(m);
-
       const btnReportDismiss = document.getElementById('btnReportDismiss');
       if (btnReportDismiss) btnReportDismiss.onclick = async ()=>{
-        if (!firebaseOk) return;
-        btnReportDismiss.disabled = true; btnReportDismiss.textContent = '처리중...';
         try{
-          await adminDismissAllReports(m.id);
-          alert('신고가 반려되었습니다. 숨김이 해제됩니다.');
+          await updateDoc(doc(db,'markers', m.id), { hiddenUntil: null });
           const rec = markerMap.get(m.id);
-          if (rec){ rec.data.hiddenUntil = null; applyVisibility(m.id); recomputeSeqs(); }
+          if (rec){ rec.data.hiddenUntil = null; applyVisibility(m.id); }
+          alert('숨김이 해제되었습니다.');
         }catch(e){
-          alert('신고 반려 실패: ' + (e?.message||e));
-        }finally{
-          btnReportDismiss.disabled = false; btnReportDismiss.textContent = '신고 반려';
+          alert('해제 실패: ' + (e?.message||e));
         }
       };
 
@@ -1361,15 +1212,7 @@
         modal.style.display='none'; pending=null;
         setBtn('등록 완료!'); setTimeout(()=>{ saveBtn.disabled=false; setBtn(prevTxt); }, 700);
       } catch (err) {
-        console.error('[SAVE ERROR]', err);
-        const msg = err?.message || String(err);
-        if (msg.includes('CORS') || msg.includes('preflight')) {
-          alert('업로드가 CORS로 차단되었습니다.\n\n• Storage 버킷 활성화/일치 확인\n• 브라우저 차단 확장 해제, localhost 사용\n• Auth 허용 도메인에 127.0.0.1/localhost 추가');
-        } else if (msg.includes('permission') || msg.includes('unauthorized')) {
-          alert('권한 오류: Firestore/Storage 보안 규칙을 점검하세요.');
-        } else {
-          alert('저장 실패: ' + msg);
-        }
+        alert('저장 실패: ' + (err?.message||err));
         saveBtn.disabled=false; setBtn(prevTxt);
       }
     };
