@@ -266,7 +266,8 @@
     const WILD_ZONES = [ /* { url:'wild/a.png', bounds:[[y1,x1],[y2,x2]], opacity:0.65 } */ ];
     const wildLayer = L.layerGroup().addTo(map);
     let wildVisible = true;
-    let showPendingOnly = false; // ★ 전역으로 둠 (이전 스코프 오류 수정)
+    let showPendingOnly = false;
+
     function buildWildOverlays(){
       wildLayer.clearLayers();
       for (const z of WILD_ZONES){
@@ -309,6 +310,32 @@
     } catch (e) {
       firebaseOk = false;
       console.warn("[Firebase] 동적 import 실패 — 오프라인 모드", e);
+    }
+
+    /* ---------------- 업로드 유틸 ---------------- */
+    // 파일명 안전화 + 단건 업로드 시도 후 실패하면 resumable로 폴백
+    const safeName = (name)=> name.normalize('NFKD').replace(/[^\w.\-]+/g,'_').replace(/_+/g,'_').slice(-80);
+
+    async function uploadSmart(file, folder, onProgress, label='업로드'){
+      if (!firebaseOk) throw new Error('Firebase unavailable');
+      const uid = (me && me.uid) || 'anon';
+      const fname = `${Date.now()}_${safeName(file.name)}`;
+      const path  = `${folder}/${uid}/${fname}`;
+      const r     = ref(st, path);
+      try{
+        onProgress?.(`${label}…`);
+        await uploadBytes(r, file);
+        return await getDownloadURL(r);
+      }catch(e1){
+        console.warn('[upload] simple 실패 → resumable', e1);
+      }
+      const task = uploadBytesResumable(r, file);
+      await new Promise((resolve, reject)=>{
+        task.on('state_changed',
+          s=> onProgress?.(`${label}… ${Math.round(s.bytesTransferred/s.totalBytes*100)}%`),
+          reject, resolve);
+      });
+      return await getDownloadURL(r);
     }
 
     /* ---------------- 카테고리 ---------------- */
@@ -442,7 +469,6 @@
         if ($btnPendingOnly) { $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on'); }
 
         if (me){
-          // admins/{uid} 문서 존재 여부로 관리자 판별
           onSnapshot(doc(db,'admins', me.uid), s=>{
             isAdmin = s.exists();
             $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
@@ -785,7 +811,7 @@
 
     function openComments(marker){
       if (!firebaseOk) { $cForm.style.display='none'; $cList.innerHTML=''; return; }
-      if (unsubComments){ unsubComments(); unsubComments=null; }
+      if (unsubComments){ unsubComments();unsubComments=null; }
       $cForm.style.display = me ? 'block':'none';
       $cBody.value='';
       const qC = query(collection(db,'markers', marker.id, 'comments'), orderBy('createdAt','asc'));
