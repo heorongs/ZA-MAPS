@@ -126,9 +126,9 @@
         <button id="fltWild" class="flt on">와일드 존</button>
         <button id="fltAll" class="flt">전체 선택</button>
         <button id="fltNone" class="flt">전체 해제</button>
-        <!-- 관리자 전용: 승인 대기 핀 & 신고 목록(레이어) -->
+        <!-- 관리자 전용: 승인 대기 핀 -->
         <button id="fltPending" class="flt" style="display:none">승인 대기 핀</button>
-        <button id="fltReported" class="flt" style="display:none">신고 레이어</button>
+        <!-- (요청대로 '신고 레이어' 버튼은 제거) -->
       </div>
     </div>
 
@@ -276,7 +276,6 @@
 
     // 관리자 전용 토글 상태
     let showPendingOnly = false;    // 승인 대기 핀만
-    let showReportedOnly = false;   // (일반 모드용) 신고 레이어 토글
     let adminReportMode = false;    // ★ 신고 관리 모드 (관리자만)
 
     /* ---------------- Firebase: 동적 import ---------------- */
@@ -358,7 +357,7 @@
       {key:'보물',           label:'보물',           defaultIcon:'treasure.png'},
       {key:'기타 아이템',     label:'기타 아이템',     defaultIcon:'other_item.png'},
       {key:'메인 임무',       label:'메인 임무',       defaultIcon:'main_mission.png'},
-      {key:'사이드 임무',     label:'사이드 임무',     defaultIcon:'side_mission.png'},
+      {key:'사이드 임무',     label:'사이드 임무',       defaultIcon:'side_mission.png'},
       {key:'승급전',         label:'승급전',         defaultIcon:'promotion_match.png'},
       {key:'사다리',         label:'사다리',         defaultIcon:'ladder.png'},
       {key:'NPC',            label:'NPC',            defaultIcon:'npc.png'},
@@ -388,7 +387,6 @@
     const $logout = document.getElementById('logout');
     const $adminBadge = document.getElementById('adminBadge');
     const $btnPendingOnly = document.getElementById('fltPending');
-    const $btnReportedOnly = document.getElementById('fltReported');
     const $btnAdminReport = document.getElementById('btnAdminReport');
     let me=null, isAdmin=false;
 
@@ -411,7 +409,6 @@
         document.getElementById('logout').style.display=me?'inline-block':'none';
         isAdmin=false; $adminBadge.style.display='none';
         $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on');
-        $btnReportedOnly.style.display='none'; showReportedOnly=false; $btnReportedOnly.classList.remove('on');
         $btnAdminReport.style.display='none'; setAdminReportMode(false);
 
         if (me){
@@ -419,13 +416,11 @@
             isAdmin = s.exists();
             $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
             $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
-            $btnReportedOnly.style.display = isAdmin ? 'inline-block' : 'none';
             $btnAdminReport.style.display = isAdmin ? 'inline-block' : 'none';
             resubscribe();
           }, ()=>{
             isAdmin=false; $adminBadge.style.display='none';
             $btnPendingOnly.style.display='none';
-            $btnReportedOnly.style.display='none';
             $btnAdminReport.style.display='none';
             setAdminReportMode(false);
             resubscribe();
@@ -489,7 +484,7 @@
       const b=e.target.closest('[data-sort]'); if(!b) return;
       repSortMode = b.getAttribute('data-sort');
       [...repSortBar.children].forEach(x=> x.classList.toggle('on', x===b));
-      renderReportedComments(); // 현재 데이터로 즉시 정렬 반영
+      renderReportedComments();
     };
 
     function buildFilters(){
@@ -509,12 +504,6 @@
         if (!isAdmin) return;
         showPendingOnly = !showPendingOnly;
         $btnPendingOnly.classList.toggle('on', showPendingOnly);
-        applyAllVisibility(); recomputeSeqs();
-      };
-      $btnReportedOnly.onclick = ()=>{
-        if (!isAdmin) return;
-        showReportedOnly = !showReportedOnly;
-        $btnReportedOnly.classList.toggle('on', showReportedOnly);
         applyAllVisibility(); recomputeSeqs();
       };
 
@@ -544,7 +533,7 @@
     let textFilter = ''; // lowercased
     function applyTextFilter(q){
       textFilter = norm(q||'');
-      applyAllVisibility(); // 검색어 변경 시 즉시 반영
+      applyAllVisibility();
       recomputeSeqs();
     }
     qSearch.onclick = ()=> { const q = qInput.value.trim(); applyTextFilter(q); if (q) logQuery(q).catch(()=>{}); };
@@ -595,7 +584,7 @@
 
     /* ---------------- 신고 피드(관리자 모드용) ---------------- */
     let reportedMarkerSet = new Set(); // 최근 48h 내 marker pending 신고 존재
-    // 신고된 댓글: { markerId, commentId, body, reason?, createdAt(첫 신고시점), count, remainMs }
+    // 신고된 댓글: { markerId, commentId, body, reason?, createdAt(첫 신고시점, firstReportAt), count, remainMs }
     let reportedComments = [];
 
     let unsubRepMarkers = null;
@@ -832,7 +821,7 @@
               const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
               const s = await getDocs(q);
               await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
-            }catch(_e){ /* 무시: 권한/인덱스 이슈 가능 */ }
+            }catch(_e){ /* 무시 */ }
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), { hiddenUntil: null });
             alert('해당 댓글 신고를 반려했습니다.');
           }catch(err){
@@ -917,11 +906,7 @@
       // 기본 승인 상태 필터
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
 
-      // (일반 모드) 신고 레이어: 숨김 적용된 핀만 보기 (관리자 시)
-      const isHidden = isHiddenByReport(m);
-      const reportedOk = isAdmin ? (showReportedOnly ? isHidden : true) : true;
-
-      const ok = catOn && !hiddenForUser && txtOk && statusOk && reportedOk;
+      const ok = catOn && !hiddenForUser && txtOk && statusOk;
       if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
       else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
     }
@@ -966,9 +951,7 @@
       if (catVisible.get(m.category) === false) return false;
       if (!matchText(m)) return false;
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
-      const isHidden = isHiddenByReport(m);
-      const reportedOk = isAdmin ? (showReportedOnly ? isHidden : true) : true;
-      return !!(statusOk && reportedOk);
+      return !!statusOk;
     }
 
     function recomputeSeqs(){
@@ -1045,7 +1028,7 @@
         snap.forEach(d=>{
           const c = { id:d.id, ...d.data() };
           const hidden = c.hiddenUntil ? (toMs(c.hiddenUntil) > now) : false;
-          if (c.deleted) return; if (hidden) return;
+          if (c.deleted) return; if (hidden) return;   // ← 신고 시 '임시 숨김'만 적용, 삭제 아님
           items.push(c);
         });
         $cList.innerHTML = items.map(c => `
@@ -1066,14 +1049,14 @@
             const rep = { type:'comment', markerId: marker.id, commentId: cid, uid: me.uid, reason,
                           status:'pending', createdAt: serverTimestamp() };
             await addDoc(collection(db,'markers', marker.id, 'comments', cid, 'reports'), rep);
-            await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { hiddenUntil: new Date(Date.now()+HIDE_MS) });
+            await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { hiddenUntil: new Date(Date.now()+HIDE_MS) }); // ← 48h 임시 숨김
             alert('신고가 접수되었습니다.');
           };
         });
         $cList.querySelectorAll('[data-cdel]').forEach(btn=>{
           btn.onclick = async ()=>{
             const cid = btn.getAttribute('data-cdel');
-            if (!confirm('댓글을 삭제할까요?')) return;
+            if (!confirm('댓글을 삭제할까요?')) return;   // ← 삭제는 별도 동작(작성자/관리자만)
             await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { deleted:true });
           };
         });
@@ -1147,6 +1130,14 @@
 
     function openInfo(m, seqNum){
       currentOpenId=m.id;
+      const $infoTitle=document.getElementById('infoTitle');
+      const $infoId=document.getElementById('infoId');
+      const $infoMeta=document.getElementById('infoMeta');
+      const $infoBody=document.getElementById('infoBody');
+      const $infoMediaTop=document.getElementById('infoMediaTop');
+      const $infoBtns=document.getElementById('infoBtns');
+      const $infoPk=document.getElementById('infoPk');
+
       $infoTitle.textContent=m.title||'(제목 없음)';
       $infoId.textContent = seqNum ? '#'+seqNum : '#-';
       const statusText = m.status || 'pending';
