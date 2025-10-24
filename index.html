@@ -381,7 +381,7 @@
     const $adminBadge = document.getElementById('adminBadge');
     const $btnPendingOnly = document.getElementById('fltPending');
     const $btnReportedOnly = document.getElementById('fltReported');
-    const $btnAdminReport = document.getElementById('btnAdminReport');
+    const $btnAdminReport = document.getElementById('btnAdminReport']);
     let me=null, isAdmin=false;
 
     $login.onclick = async (e) => {
@@ -576,7 +576,7 @@
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
-    /* ---------------- 신고 피드(관리자 모드용) ---------------- */
+    /* ---------------- 신고 피드(관리자 모드용) — 교체된 섹션 ---------------- */
     let reportedMarkerSet = new Set(); // 최근 48h 내 marker pending 신고 존재
     let reportedComments = [];        // {markerId, commentId, body?, reason?, createdAt}
 
@@ -589,25 +589,29 @@
       return (nowMs() - ms) <= HIDE_MS;
     }
 
+    function clearReportFeeds(){
+      reportedMarkerSet = new Set();
+      reportedComments = [];
+      renderReportedComments();
+      applyAllVisibility();
+      if (unsubRepMarkers){unsubRepMarkers(); unsubRepMarkers=null;}
+      if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
+    }
+
     function subscribeAdminReportFeeds(){
       if (!firebaseOk || !isAdmin){
-        reportedMarkerSet = new Set();
-        reportedComments = [];
-        renderReportedComments();
-        applyAllVisibility();
-        if (unsubRepMarkers){unsubRepMarkers(); unsubRepMarkers=null;}
-        if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
+        clearReportFeeds();
         return;
       }
-      // 신고된 마커 (collectionGroup: reports) pending & type:marker
+
+      // --- 1) 신고된 마커: reports 그룹(pending) 구독
       if (unsubRepMarkers){unsubRepMarkers(); unsubRepMarkers=null;}
       const qRM = query(collectionGroup(db,'reports'), where('status','==','pending'));
       unsubRepMarkers = onSnapshot(qRM, snap=>{
         const next = new Set();
         snap.forEach(d=>{
           const data = d.data()||{};
-          // type==='marker' 이거나 경로가 markers/{id}/reports/{rid}
-          const path = d.ref.path.split('/');
+          const path = d.ref.path.split('/'); // markers/{m}/reports/{r} | markers/{m}/comments/{c}/reports/{r}
           const isMarkerReport = data.type==='marker' || (path[0]==='markers' && path[2]==='reports');
           if (!isMarkerReport) return;
           if (!within48h(data.createdAt)) return;
@@ -617,17 +621,19 @@
         reportedMarkerSet = next;
         applyAllVisibility();
         recomputeSeqs();
+      }, err=>{
+        console.warn('[reported markers] collectionGroup error', err);
       });
 
-      // 신고된 댓글 (collectionGroup: reports) pending & type:comment
+      // --- 2) 신고된 댓글: 우선 reports 그룹(pending) 시도, 실패/0건이면 폴백
       if (unsubRepComments){unsubRepComments(); unsubRepComments=null;}
       const qRC = query(collectionGroup(db,'reports'), where('status','==','pending'));
       unsubRepComments = onSnapshot(qRC, async snap=>{
-        const items = [];
+        let items = [];
         const fetches = [];
         snap.forEach(d=>{
           const data = d.data()||{};
-          const path = d.ref.path.split('/'); // markers/{m}/comments/{c}/reports/{r} 또는 기타
+          const path = d.ref.path.split('/');
           const isCommentReport = data.type==='comment' || (path.length>=6 && path[2]==='comments' && path[4]==='reports');
           if (!isCommentReport) return;
           if (!within48h(data.createdAt)) return;
@@ -643,22 +649,61 @@
           };
           items.push(item);
 
-          // 댓글 본문 조회
-          if (firebaseOk){
-            fetches.push(getDoc(doc(db,'markers', markerId, 'comments', commentId)).then(cs=>{
-              if (cs.exists()){
-                item.body = cs.data()?.body || '(본문 없음)';
-              }else{
-                item.body = '(삭제됨)';
-              }
-            }).catch(()=>{ item.body='(로드 실패)'; }));
-          }
+          // 댓글 본문 불러오기 (권한 안되면 폴백에서 채워짐)
+          fetches.push(
+            getDoc(doc(db,'markers', markerId, 'comments', commentId))
+              .then(cs=>{ item.body = cs.exists() ? (cs.data()?.body || '(본문 없음)') : '(삭제됨)'; })
+              .catch(()=>{ item.body='(로드 실패)'; })
+          );
         });
+
+        if (fetches.length === 0) { // 읽기권한/인덱스 문제 또는 0건
+          await subscribeReportedCommentsFallback();
+          return;
+        }
+
         await Promise.all(fetches);
-        // 최신순 정렬
         reportedComments = items.sort((a,b)=>b.createdAt - a.createdAt);
         renderReportedComments();
-      }, err=> console.warn('[reported comments]', err));
+      }, async err=>{
+        console.warn('[reported comments] collectionGroup error', err);
+        await subscribeReportedCommentsFallback(); // 에러 시 폴백
+      });
+    }
+
+    // 폴백: 숨김 적용된 댓글(hiddenUntil > now)을 그룹쿼리로 수집
+    async function subscribeReportedCommentsFallback(){
+      try{
+        const qHidden = query(collectionGroup(db,'comments'), where('hiddenUntil','>', new Date()));
+        const snap = await getDocs(qHidden);
+        const items = [];
+        const now = nowMs();
+        snap.forEach(d=>{
+          const path = d.ref.path.split('/'); // markers/{m}/comments/{c}
+          if (!(path[0]==='markers' && path[2]==='comments')) return;
+          const markerId = path[1];
+          const commentId= path[3];
+          const data = d.data()||{};
+          const hu = toMs(data.hiddenUntil);
+          if (!hu) return;
+          if ((hu - now) <= 0) return; // 이미 해제 제외
+          const approxCreated = hu - HIDE_MS; // 대략적인 발생 시각
+
+          items.push({
+            id: `${markerId}_${commentId}`,
+            markerId, commentId,
+            reason: '(사유 미확인)',
+            createdAt: approxCreated,
+            body: data.body || '(본문 없음)'
+          });
+        });
+        reportedComments = items.sort((a,b)=>b.createdAt - a.createdAt);
+        renderReportedComments();
+      }catch(err){
+        console.warn('[fallback comments] error', err);
+        reportedComments = [];
+        renderReportedComments();
+      }
     }
 
     function renderReportedComments(){
@@ -689,11 +734,9 @@
         const commentId= card.getAttribute('data-cid');
 
         if (e.target.matches('[data-jump]')){
-          // 해당 핀 열고 댓글로 스크롤
           const rec = markerMap.get(markerId);
           if (rec){
             openInfoWithSeq(rec.data);
-            // 댓글 로딩 후 해당 댓글로 스크롤
             setTimeout(()=>{
               const el = document.getElementById('c-'+commentId);
               if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
@@ -703,12 +746,15 @@
           }
           return;
         }
+
         if (e.target.matches('[data-dismiss]')){
           try{
-            // 해당 댓글의 pending report 모두 반려 + 댓글 숨김 해제
-            const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
-            const s = await getDocs(q);
-            await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
+            // 보고서가 안보이는 환경도 고려: 1) 보이는 report는 rejected, 2) 숨김 해제
+            try{
+              const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
+              const s = await getDocs(q);
+              await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
+            }catch(_e){ /* 무시: 권한/인덱스 이슈 가능 */ }
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), { hiddenUntil: null });
             alert('해당 댓글 신고를 반려했습니다.');
           }catch(err){
@@ -725,7 +771,7 @@
     function subscribeMarkers(){
       if (!firebaseOk) return;
       if (unsubMain){unsubMain();} if (unsubPending){unsubPending();}
-      markerMap.forEach(({group, marker})=> group.removeLayer(marker));
+      markerMap.forEach(({group, marker})=> group.removeLayer(prev.marker));
       markerMap.clear();
 
       const qApproved=query(collection(db,'markers'), where('status','==','approved'));
