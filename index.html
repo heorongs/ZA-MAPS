@@ -248,7 +248,7 @@
 
     // 관리자 전용 토글 상태
     let showPendingOnly = false;    // 승인 대기 핀만
-    let showReportedOnly = false;   // 신고된 핀만
+    let showReportedOnly = false;   // 신고된 핀만(숨김 적용된 핀)
 
     function buildWildOverlays(){
       wildLayer.clearLayers();
@@ -262,7 +262,7 @@
     let firebaseOk = true;
     let app, auth, db, st;
     let GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged;
-    let collection, collectionGroup, addDoc, serverTimestamp, onSnapshot,
+    let collection, addDoc, serverTimestamp, onSnapshot,
         orderBy, query, doc, updateDoc, deleteDoc, where, runTransaction, getDocs, getDoc, setDoc, increment;
     let ref, getDownloadURL, uploadBytesResumable, uploadBytes;
 
@@ -287,7 +287,7 @@
       db   = fsMod.getFirestore(app);
       st   = stMod.getStorage(app);
       ({ GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } = authMod);
-      ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, runTransaction, getDocs, getDoc, setDoc, increment } = fsMod);
+      ({ collection, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, runTransaction, getDocs, getDoc, setDoc, increment } = fsMod);
       ({ ref, getDownloadURL, uploadBytesResumable, uploadBytes } = stMod);
     } catch (e) {
       firebaseOk = false;
@@ -370,7 +370,7 @@
     const $btnReportedOnly = document.getElementById('fltReported');
     let me=null, isAdmin=false;
 
-    // 인앱 감지/안내 (생략 없이 유지)
+    // 인앱 감지/안내
     function isInAppBrowser() {
       const ua = navigator.userAgent || '';
       const lc = ua.toLowerCase();
@@ -437,36 +437,7 @@
     $logout.onclick = ()=>{ if(firebaseOk) signOut(auth); };
     if (firebaseOk) getRedirectResult(auth).catch(()=>{});
 
-    function resubscribe(){ subscribeMarkers(); subscribeReportsForAdmin(); }
-
-    /* ---------------- 신고 집합(관리자용) 구독 ---------------- */
-    let reportedSet = new Set(); // 최근 48시간 내 pending 신고가 있는 markerId들
-    let unsubReports = null;
-    function subscribeReportsForAdmin(){
-      if (!firebaseOk) return;
-      if (unsubReports){ unsubReports(); unsubReports=null; }
-      reportedSet = new Set();
-      if (!isAdmin) { applyAllVisibility(); return; }
-      const qR = query(collectionGroup(db,'reports'), where('status','==','pending'));
-      unsubReports = onSnapshot(qR, snap=>{
-        const now = nowMs();
-        const next = new Set();
-        snap.forEach(d=>{
-          // path: markers/{markerId}/reports/{rid} 또는 markers/{markerId}/comments/{cid}/reports/{rid}
-          const path = d.ref.path.split('/');
-          const created = toMs(d.data().createdAt);
-          const within48h = created ? (now - created) <= HIDE_MS : true;
-          if (!within48h) return;
-          const markerId = (path[0]==='markers' ? path[1] : (d.data().markerId || null));
-          if (markerId) next.add(markerId);
-        });
-        reportedSet = next;
-        applyAllVisibility();
-        recomputeSeqs();
-      }, err=>{
-        console.warn('[reports subscribe] error', err);
-      });
-    }
+    function resubscribe(){ subscribeMarkers(); }
 
     if (firebaseOk){
       onAuthStateChanged(auth, async (user)=>{
@@ -700,9 +671,10 @@
       // 기본 승인 상태 필터
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
 
-      // 관리자 '신고 목록' 토글: 최근 48시간 내 pending 신고가 있는 핀만
+      // 관리자 '신고 목록' 토글: 숨김 적용된 핀만 보기
+      const isHidden = isHiddenByReport(m);
       const reportedOk = isAdmin
-        ? (showReportedOnly ? reportedSet.has(m.id) : true)
+        ? (showReportedOnly ? isHidden : true)
         : true;
 
       const ok = catOn && !hiddenForUser && txtOk && statusOk && reportedOk;
@@ -742,24 +714,6 @@
       return { ok:true, hid:hidApplied };
     }
 
-    async function recomputeHiddenUntil(markerId){
-      if (!firebaseOk) return;
-      const q = collection(db, 'markers', markerId, 'reports');
-      const snap = await getDocs(q);
-      let maxUntil = 0; const now = nowMs();
-      snap.forEach(d=>{
-        const r = d.data();
-        if (r.status === 'pending'){
-          const until = toMs(r.createdAt) + HIDE_MS;
-          if (until > now && until > maxUntil) maxUntil = until;
-        }
-      });
-      const refm = doc(db,'markers', markerId);
-      await updateDoc(refm, { hiddenUntil: (maxUntil>now)? new Date(maxUntil) : null });
-      const rec = markerMap.get(markerId);
-      if (rec){ rec.data.hiddenUntil = (maxUntil>now)? new Date(maxUntil) : null; applyVisibility(markerId); recomputeSeqs(); }
-    }
-
     /* ---------- 동적 시퀀스(고유번호) 재계산 ---------- */
     function visibleForSeq(m){
       if (!m) return false;
@@ -767,7 +721,8 @@
       if (catVisible.get(m.category) === false) return false;
       if (!matchText(m)) return false;
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
-      const reportedOk = isAdmin ? (showReportedOnly ? reportedSet.has(m.id) : true) : true;
+      const isHidden = isHiddenByReport(m);
+      const reportedOk = isAdmin ? (showReportedOnly ? isHidden : true) : true;
       return !!(statusOk && reportedOk);
     }
 
