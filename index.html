@@ -87,6 +87,12 @@
     .citem .act{ display:flex; gap:8px; margin-top:6px }
     .citem .btn{ background:#2a2a2a; color:#fff; border:0; padding:4px 8px; border-radius:8px; cursor:pointer }
     .citem .btn.warn{ background:#ff5252 }
+
+    /* 신고/숨김 배지 */
+    .badge{display:inline-block; padding:2px 6px; border-radius:6px; font-size:11px; line-height:1; vertical-align:middle}
+    .badge.report{background:#ff7043; color:#111; border:1px solid #ffb199}
+    .badge.hidden{background:#ffc107; color:#111; border:1px solid #ffe082}
+
     /* 입력 모달 */
     #modal{display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;}
     #panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px}
@@ -477,7 +483,7 @@
     // 좌측 필터 UI
     const side = document.getElementById('side');
     const sideCats = document.getElementById('sideCats');
-    const sideReports = document.getElementById('sideReports');
+    the sideReports = document.getElementById('sideReports');
     const repCommentList = document.getElementById('repCommentList');
     const fltList = document.getElementById('fltList');
     const repSortBar = document.getElementById('repSortBar');
@@ -644,10 +650,13 @@
       const list = [...reportedComments].sort(sortReported);
       repCommentList.innerHTML = list.map(rc=>`
         <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc(rc.commentId)}">
-          <div style="font-weight:600">#${rc.markerId.slice(0,6)}… · 댓글</div>
+          <div style="display:flex;gap:6px;align-items:center;font-weight:600">
+            #${rc.markerId.slice(0,6)}… · 댓글
+            <span class="badge report">신고 ${rc.count||1}</span>
+            ${(rc.remainMs||0) > 0 ? `<span class="badge hidden">숨김중</span>` : ``}
+          </div>
           <div style="white-space:pre-wrap;margin-top:6px">${esc(rc.body || '')}</div>
-          <div class="meta">임시 숨김: ${msToHuman(rc.remainMs||0)}</div>
-          <div class="meta">최초 접수(추정): ${new Date(rc.firstReportAt||Date.now()).toLocaleString()}</div>
+          <div class="meta">임시 숨김: ${msToHuman(rc.remainMs||0)} · 최초 접수(추정): ${new Date(rc.firstReportAt||Date.now()).toLocaleString()}</div>
           <div class="act">
             <button class="rbtn" data-jump>해당 핀 보기</button>
             <button class="rbtn" data-dismiss>신고 반려</button>
@@ -711,7 +720,7 @@
             body: data.body || '(본문 없음)',
             remainMs: hu - now,
             firstReportAt: hu - HIDE_MS,
-            count: 1 // 보고 수는 알 수 없으므로 1로 표기(숨김 기준)
+            count: 1 // pending 리포트 수는 알 수 없으므로 1로 표시
           });
         });
         reportedComments = items;
@@ -779,8 +788,8 @@
       const {group, marker, data:m} = rec;
 
       if (adminReportMode){
-        // 신고 모드에서는 숨김/신고된 핀만 보여주고 싶다면 여기 조건을 조정하세요.
-        const ok = isHiddenByReport(m); // 핀 자체가 숨김 상태면 우선 표시
+        // 신고 모드: 숨김/신고된 핀만 보이도록 (현재는 숨김 기준)
+        const ok = isHiddenByReport(m);
         if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
         else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
         return;
@@ -901,37 +910,72 @@
       $cForm.style.display = me ? 'block':'none';
       $cBody.value='';
       const qC = query(collection(db,'markers', marker.id, 'comments'), orderBy('createdAt','asc'));
-      unsubComments = onSnapshot(qC, snap=>{
-        const now = nowMs(); const items = [];
+      unsubComments = onSnapshot(qC, async snap=>{
+        const now = nowMs();
+        const items = [];
+        const tasks = [];
+
         snap.forEach(d=>{
           const c = { id:d.id, ...d.data() };
           const hidden = c.hiddenUntil ? (toMs(c.hiddenUntil) > now) : false;
-          if (c.deleted) return; if (hidden) return;   // 신고 시 '임시 숨김'
-          items.push(c);
-        });
-        $cList.innerHTML = items.map(c => `
-          <div class="citem" id="c-${c.id}">
-            <div class="meta">${c.displayName || '익명'} · ${new Date(toMs(c.createdAt||Date.now())).toLocaleString()}</div>
-            <div class="body" style="white-space:pre-wrap; margin-top:6px">${esc(c.body||'')}</div>
-            <div class="act">
-              <button class="btn" data-crep="${c.id}">신고</button>
-              ${(isAdmin || me?.uid===c.uid) ? `<button class="btn warn" data-cdel="${c.id}">삭제</button>`:''}
-            </div>
-          </div>`).join('');
+          // 일반 사용자는 숨김 댓글을 보지 못함 / 관리자는 숨김 댓글도 보되 배지 표시
+          if (!isAdmin && (c.deleted || hidden)) return;
+          if (isAdmin && c.deleted) return;
 
+          const item = {
+            id: c.id,
+            displayName: c.displayName || '익명',
+            createdAt: toMs(c.createdAt || Date.now()),
+            body: c.body || '',
+            isHidden: hidden,
+            repCount: 0,
+            uid: c.uid || null
+          };
+          items.push(item);
+
+          // pending 신고 수 집계 (권한/인덱스 문제 시 0으로 둠)
+          tasks.push(
+            getDocs(query(
+              collection(db, 'markers', marker.id, 'comments', c.id, 'reports'),
+              where('status','==','pending')
+            )).then(s=>{ item.repCount = s.size || 0; }).catch(()=>{})
+          );
+        });
+
+        await Promise.all(tasks);
+
+        $cList.innerHTML = items.map(c => {
+          const badges = [];
+          if (c.repCount > 0) badges.push(`<span class="badge report">신고 ${c.repCount}</span>`);
+          if (c.isHidden)     badges.push(`<span class="badge hidden">숨김중</span>`);
+          const badgeRow = badges.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:4px">${badges.join('')}</div>` : '';
+
+          return `
+            <div class="citem" id="c-${c.id}">
+              <div class="meta">${esc(c.displayName)} · ${new Date(c.createdAt).toLocaleString()}</div>
+              ${badgeRow}
+              <div class="body" style="white-space:pre-wrap; margin-top:6px">${esc(c.body)}</div>
+              <div class="act">
+                <button class="btn" data-crep="${c.id}">신고</button>
+                ${(isAdmin || me?.uid===c.uid) ? `<button class="btn warn" data-cdel="${c.id}">삭제</button>`:''}
+              </div>
+            </div>`;
+        }).join('');
+
+        // 신고 버튼
         $cList.querySelectorAll('[data-crep]').forEach(btn=>{
           btn.onclick = async ()=>{
             if (!me){ alert('로그인이 필요합니다'); return; }
             const cid = btn.getAttribute('data-crep');
             const reason = prompt('댓글 신고 사유를 입력해주세요'); if (!reason) return;
-            await addDoc(collection(db,'markers', marker.id, 'comments', cid, 'reports'), {
-              type:'comment', markerId: marker.id, commentId: cid, uid: me.uid, reason,
-              status:'pending', createdAt: serverTimestamp()
-            });
-            await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { hiddenUntil: new Date(Date.now()+HIDE_MS) });
+            const rep = { type:'comment', markerId: marker.id, commentId: cid, uid: me.uid, reason,
+                          status:'pending', createdAt: serverTimestamp() };
+            await addDoc(collection(db,'markers', marker.id, 'comments', cid, 'reports'), rep);
+            await updateDoc(doc(db,'markers', marker.id, 'comments', cid), { hiddenUntil: new Date(Date.now()+HIDE_MS) }); // 48h 임시 숨김
             alert('신고가 접수되었습니다.');
           };
         });
+        // 삭제 버튼
         $cList.querySelectorAll('[data-cdel]').forEach(btn=>{
           btn.onclick = async ()=>{
             const cid = btn.getAttribute('data-cdel');
@@ -1230,5 +1274,3 @@
   </script>
 </body>
 </html>
-
-
