@@ -643,7 +643,7 @@
       }
       const list = [...reportedComments].sort(sortReported);
       repCommentList.innerHTML = list.map(rc=>`
-        <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc.commentId)}">
+        <div class="ritem" data-mid="${esc(rc.markerId)}" data-cid="${esc.(rc.commentId)}">
           <div style="font-weight:600">#${rc.markerId.slice(0,6)}… · 댓글</div>
           <div style="white-space:pre-wrap;margin-top:6px">${esc(rc.body || '')}</div>
           <div class="meta">임시 숨김: ${msToHuman(rc.remainMs||0)}</div>
@@ -1230,3 +1230,4 @@
   </script>
 </body>
 </html>
+
