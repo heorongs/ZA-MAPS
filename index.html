@@ -860,6 +860,47 @@
       openInfo(m, seqNum);
     }
 
+    async function adminDismissAllReports(markerId){
+      // 신고 반려: 해당 핀의 pending 리포트를 모두 'rejected'로 바꾸고 hiddenUntil 초기화
+      try{
+        const qR = query(collection(db,'markers', markerId, 'reports'), where('status','==','pending'));
+        const snap = await getDocs(qR);
+        const updates=[];
+        snap.forEach(d=> updates.push(updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
+        await Promise.all(updates);
+      }catch(e){
+        console.warn('[신고 반려] report 업데이트 실패', e);
+      }
+      try{
+        await updateDoc(doc(db,'markers', markerId), { hiddenUntil: null });
+      }catch(e){
+        console.warn('[신고 반려] hiddenUntil 초기화 실패', e);
+      }
+    }
+
+    async function adminEditOrDelete(marker){
+      const choice = prompt('관리자 작업을 선택하세요: edit / delete', 'edit');
+      if (!choice) return;
+      if (choice.toLowerCase()==='delete'){
+        if (!confirm('이 핀을 완전히 삭제할까요?')) return;
+        await deleteDoc(doc(db,'markers', marker.id));
+        $info.style.display='none'; currentOpenId=null;
+        return;
+      }
+      if (choice.toLowerCase()==='edit'){
+        const newTitle = prompt('제목 수정', marker.title||'');
+        if (newTitle===null) return;
+        const newBody  = prompt('내용 수정', marker.body||'');
+        if (newBody===null) return;
+        try{
+          await updateDoc(doc(db,'markers', marker.id), { title:newTitle, body:newBody });
+          alert('수정되었습니다.');
+        }catch(e){
+          alert('수정 실패: ' + (e?.message||e));
+        }
+      }
+    }
+
     function openInfo(m, seqNum){
       currentOpenId=m.id;
       $infoTitle.textContent=m.title||'(제목 없음)';
@@ -879,6 +920,7 @@
 
       const isMine = me && me.uid===m.authorUid;
       const canEdit = isMine && (m.status==='pending'||m.status===undefined);
+      const isReported = isHiddenByReport(m); // 신고로 인해 숨김 적용된 경우를 '신고됨'으로 간주
 
       $infoBtns.innerHTML = `
         <button id="btnReport" class="primary">핀 신고</button>
@@ -888,6 +930,10 @@
               ? `<button id="btnAppr" class="primary">승인</button><button id="btnReject" class="warn">반려</button>`
               : ``}
             <button id="btnAdminDel" class="warn">관리자 삭제</button>
+            ${isReported ? `
+              <button id="btnAdminEditCombo">삭제 및 수정</button>
+              <button id="btnReportDismiss">신고 반려</button>
+            ` : ``}
           ` : ``}
       `;
 
@@ -949,6 +995,26 @@
         btnRe.disabled=true; btnRe.textContent='반려중...';
         try{ await updateDoc(doc(db,'markers', m.id), { status:'rejected' }); }
         finally{ btnRe.disabled=false; btnRe.textContent='반려'; }
+      };
+
+      const btnAdminEditCombo = document.getElementById('btnAdminEditCombo');
+      if (btnAdminEditCombo) btnAdminEditCombo.onclick = ()=> adminEditOrDelete(m);
+
+      const btnReportDismiss = document.getElementById('btnReportDismiss');
+      if (btnReportDismiss) btnReportDismiss.onclick = async ()=>{
+        if (!firebaseOk) return;
+        btnReportDismiss.disabled = true; btnReportDismiss.textContent = '처리중...';
+        try{
+          await adminDismissAllReports(m.id);
+          alert('신고가 반려되었습니다. 숨김이 해제됩니다.');
+          // 로컬 상태 반영
+          const rec = markerMap.get(m.id);
+          if (rec){ rec.data.hiddenUntil = null; applyVisibility(m.id); recomputeSeqs(); }
+        }catch(e){
+          alert('신고 반려 실패: ' + (e?.message||e));
+        }finally{
+          btnReportDismiss.disabled = false; btnReportDismiss.textContent = '신고 반려';
+        }
       };
 
       $info.style.display='block';
