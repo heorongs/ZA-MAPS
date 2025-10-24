@@ -536,6 +536,8 @@
       document.getElementById('btnAdminReport').classList.toggle('on', adminReportMode);
       applyAllVisibility();
       recomputeSeqs();
+      // ✅ 모드 전환 직후 즉시 렌더링
+      renderReportedComments();
     }
 
     /* ---------------- 통합 검색 ---------------- */
@@ -673,7 +675,9 @@
     async function subscribeReportedCommentsAdmin(){
       if (unsubRepComments){unsubRepComments();unsubRepComments=null;}
       if (!firebaseOk || !isAdmin){
-        reportedComments = []; renderReportedComments(); return;
+        reportedComments = [];
+        renderReportedComments(); // ✅ 즉시 반영
+        return;
       }
 
       const stops = [];
@@ -734,6 +738,9 @@
       }, err=> console.warn('[adminReports]', err)));
 
       unsubRepComments = ()=> stops.forEach(s=> s());
+
+      // ✅ 구독 직후에도 현재 상태를 즉시 그리기
+      renderReportedComments();
     }
 
     // 그룹 스냅을 reportedComments(Map)로 병합
@@ -765,8 +772,10 @@
     }
 
     function renderReportedComments(){
-      const repCommentList = document.getElementById('repCommentList');
-      if (!adminReportMode){ repCommentList.innerHTML=''; return; }
+      if (!adminReportMode){
+        repCommentList.innerHTML='';
+        return;
+      }
       if (!reportedComments.length){
         repCommentList.innerHTML = `<div style="opacity:.7">신고 접수된 댓글이 없습니다.</div>`;
         return;
@@ -794,6 +803,7 @@
         `;
       }).join('');
 
+      // 한 번만 바인딩되도록 onclick 사용
       repCommentList.onclick = async (e)=>{
         const card = e.target.closest('.ritem'); if (!card) return;
         const markerId = card.getAttribute('data-mid');
@@ -1248,7 +1258,7 @@
       const canEdit = isMine && (m.status==='pending'||m.status===undefined);
       const hiddenNow = isHiddenByReport(m);
 
-      // ★ 관리자: 신고 반려/차단 버튼을 항상 노출 (5회 미만이어도)
+      // ★ 관리자: 신고 반려/차단 버튼을 항상 노출
       $infoBtns.innerHTML = `
         <button id="btnReport" class="primary">핀 신고</button>
         ${canEdit ? `<button id="btnEdit">수정</button><button id="btnDel" class="warn">삭제</button>`:''}
