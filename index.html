@@ -312,11 +312,11 @@
       console.warn("[Firebase] 동적 import 실패 — 오프라인 모드", e);
     }
 
-    /* ---------------- 업로드 유틸 ---------------- */
-    // 파일명 안전화 + 단건 업로드 시도 후 실패하면 resumable로 폴백
+    /* ---------------- 업로드 유틸 (전역 바인딩) ---------------- */
     const safeName = (name)=> name.normalize('NFKD').replace(/[^\w.\-]+/g,'_').replace(/_+/g,'_').slice(-80);
 
-    async function uploadSmart(file, folder, onProgress, label='업로드'){
+    // 모듈 스코프에서 정의하지만 전역으로 노출
+    globalThis.uploadSmart = async function uploadSmart(file, folder, onProgress, label='업로드'){
       if (!firebaseOk) throw new Error('Firebase unavailable');
       const uid = (me && me.uid) || 'anon';
       const fname = `${Date.now()}_${safeName(file.name)}`;
@@ -336,7 +336,7 @@
           reject, resolve);
       });
       return await getDownloadURL(r);
-    }
+    };
 
     /* ---------------- 카테고리 ---------------- */
     const CATEGORIES = [
@@ -1057,11 +1057,11 @@
 
         const media=[];
         for (let i=0;i<imgFiles.length;i++){
-          const url = await uploadSmart(imgFiles[i], 'markerMedia', setBtn, `이미지 ${i+1}/${imgFiles.length}`);
+          const url = await globalThis.uploadSmart(imgFiles[i], 'markerMedia', setBtn, `이미지 ${i+1}/${imgFiles.length}`);
           media.push({type:'image', url});
         }
         if (vidFile){
-          const url = await uploadSmart(vidFile, 'markerMedia', setBtn, '동영상');
+          const url = await globalThis.uploadSmart(vidFile, 'markerMedia', setBtn, '동영상');
           media.push({type:'video', url});
         }
         const thumbUrl = media[0].url;
