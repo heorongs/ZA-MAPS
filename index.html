@@ -81,17 +81,6 @@
     #panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px}
     #panel input,#panel textarea,#panel select{width:100%; box-sizing:border-box}
     small.muted{color:#a0a7b4}
-    /* 관리자 신고목록 모달 */
-    #rmodal{ display:none; position:fixed; inset:0; background:#0008; z-index:2000; align-items:center; justify-content:center }
-    #rbox{ width:720px; max-height:80vh; overflow:auto; background:#1b1b1b; color:#e6e6e6; border-radius:12px; padding:14px }
-    #rbox h3{ margin:0 0 10px }
-    .rlist{ display:grid; gap:10px }
-    .ritem{ background:#161616; border:1px solid #2a2a2a; border-radius:10px; padding:10px }
-    .ritem .meta{ font-size:12px; color:#9aa; display:flex; gap:10px; flex-wrap:wrap }
-    .ritem .act{ margin-top:8px; display:flex; gap:8px; flex-wrap:wrap }
-    .ritem button{ background:#2a2a2a; color:#fff; border:0; padding:6px 10px; border-radius:8px; cursor:pointer }
-    .ritem button.primary{ background:#3d6cff }
-    .ritem button.warn{ background:#ff5252 }
   </style>
 </head>
 <body>
@@ -111,7 +100,7 @@
     <span style="width:1px;height:20px;background:#2f3545;margin:0 6px"></span>
     <button id="btnSearch" class="tbtn on">검색 모드</button>
     <button id="btnPlace"  class="tbtn">핀 배치 모드</button>
-    <button id="btnReports" class="tbtn" style="display:none">신고목록</button>
+    <!-- 상단 '신고목록' 버튼 제거됨 -->
   </div>
 
   <!-- 좌측 검색 사이드 -->
@@ -124,8 +113,9 @@
       <button id="fltWild" class="flt on">와일드 존</button>
       <button id="fltAll" class="flt">전체 선택</button>
       <button id="fltNone" class="flt">전체 해제</button>
-      <!-- ★ 관리자 전용: 승인 대기 핀 토글 버튼 (기본 숨김) -->
+      <!-- 관리자 전용: 승인 대기 핀 & 신고 목록 -->
       <button id="fltPending" class="flt" style="display:none">승인 대기 핀</button>
+      <button id="fltReported" class="flt" style="display:none">신고 목록</button>
     </div>
 
     <div class="hr"></div>
@@ -154,7 +144,7 @@
       <div id="infoPk" class="pk-tags"></div>
       <div id="infoBody" style="white-space:pre-wrap; margin-top:8px"></div>
 
-      <!-- 본문 아래 캐러셀(두 번째 이후 미디어) -->
+      <!-- 본문 아래 캐러셀 -->
       <div id="infoCarousel" class="carousel" style="display:none">
         <div class="inner" id="carInner"></div>
         <button class="nav prev" id="carPrev">‹</button>
@@ -218,17 +208,6 @@
     </div>
   </div>
 
-  <!-- 관리자 신고목록 모달 -->
-  <div id="rmodal">
-    <div id="rbox">
-      <div style="display:flex; align-items:center; justify-content:space-between">
-        <h3>신고목록 (48시간 내)</h3>
-        <button id="rclose" class="tbtn">닫기</button>
-      </div>
-      <div class="rlist" id="rlist"></div>
-    </div>
-  </div>
-
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module">
     /* ---------------- 유틸/폴리필 ---------------- */
@@ -266,7 +245,10 @@
     const WILD_ZONES = [ /* { url:'wild/a.png', bounds:[[y1,x1],[y2,x2]], opacity:0.65 } */ ];
     const wildLayer = L.layerGroup().addTo(map);
     let wildVisible = true;
-    let showPendingOnly = false;
+
+    // 관리자 전용 토글 상태
+    let showPendingOnly = false;    // 승인 대기 핀만
+    let showReportedOnly = false;   // 신고된 핀만
 
     function buildWildOverlays(){
       wildLayer.clearLayers();
@@ -314,8 +296,6 @@
 
     /* ---------------- 업로드 유틸 (전역 바인딩) ---------------- */
     const safeName = (name)=> name.normalize('NFKD').replace(/[^\w.\-]+/g,'_').replace(/_+/g,'_').slice(-80);
-
-    // 모듈 스코프에서 정의하지만 전역으로 노출
     globalThis.uploadSmart = async function uploadSmart(file, folder, onProgress, label='업로드'){
       if (!firebaseOk) throw new Error('Firebase unavailable');
       const uid = (me && me.uid) || 'anon';
@@ -386,11 +366,11 @@
     const $login = document.getElementById('login');
     const $logout = document.getElementById('logout');
     const $adminBadge = document.getElementById('adminBadge');
-    const $btnReports = document.getElementById('btnReports');
     const $btnPendingOnly = document.getElementById('fltPending');
+    const $btnReportedOnly = document.getElementById('fltReported');
     let me=null, isAdmin=false;
 
-    // 인앱 감지/안내
+    // 인앱 감지/안내 (생략 없이 유지)
     function isInAppBrowser() {
       const ua = navigator.userAgent || '';
       const lc = ua.toLowerCase();
@@ -457,30 +437,58 @@
     $logout.onclick = ()=>{ if(firebaseOk) signOut(auth); };
     if (firebaseOk) getRedirectResult(auth).catch(()=>{});
 
-    function resubscribe(){ subscribeMarkers(); }
+    function resubscribe(){ subscribeMarkers(); subscribeReportsForAdmin(); }
+
+    /* ---------------- 신고 집합(관리자용) 구독 ---------------- */
+    let reportedSet = new Set(); // 최근 48시간 내 pending 신고가 있는 markerId들
+    let unsubReports = null;
+    function subscribeReportsForAdmin(){
+      if (!firebaseOk) return;
+      if (unsubReports){ unsubReports(); unsubReports=null; }
+      reportedSet = new Set();
+      if (!isAdmin) { applyAllVisibility(); return; }
+      const qR = query(collectionGroup(db,'reports'), where('status','==','pending'));
+      unsubReports = onSnapshot(qR, snap=>{
+        const now = nowMs();
+        const next = new Set();
+        snap.forEach(d=>{
+          // path: markers/{markerId}/reports/{rid} 또는 markers/{markerId}/comments/{cid}/reports/{rid}
+          const path = d.ref.path.split('/');
+          const created = toMs(d.data().createdAt);
+          const within48h = created ? (now - created) <= HIDE_MS : true;
+          if (!within48h) return;
+          const markerId = (path[0]==='markers' ? path[1] : (d.data().markerId || null));
+          if (markerId) next.add(markerId);
+        });
+        reportedSet = next;
+        applyAllVisibility();
+        recomputeSeqs();
+      }, err=>{
+        console.warn('[reports subscribe] error', err);
+      });
+    }
 
     if (firebaseOk){
       onAuthStateChanged(auth, async (user)=>{
         me=user||null;
-        $who.textContent=me?(me.displayName || '로그인됨'):'로그인 안 됨';
-        $login.style.display=me?'none':'inline-block';
-        $logout.style.display=me?'inline-block':'none';
-        isAdmin=false; $adminBadge.style.display='none'; $btnReports.style.display='none';
-        if ($btnPendingOnly) { $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on'); }
+        document.getElementById('who').textContent=me?(me.displayName || '로그인됨'):'로그인 안 됨';
+        document.getElementById('login').style.display=me?'none':'inline-block';
+        document.getElementById('logout').style.display=me?'inline-block':'none';
+        isAdmin=false; $adminBadge.style.display='none';
+        if ($btnPendingOnly){ $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on'); }
+        if ($btnReportedOnly){ $btnReportedOnly.style.display='none'; showReportedOnly=false; $btnReportedOnly.classList.remove('on'); }
 
         if (me){
           onSnapshot(doc(db,'admins', me.uid), s=>{
             isAdmin = s.exists();
             $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
-            $btnReports.style.display  = isAdmin ? 'inline-block' : 'none';
-            if ($btnPendingOnly) {
-              $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
-              if (!isAdmin) { showPendingOnly = false; $btnPendingOnly.classList.remove('on'); }
-            }
+            if ($btnPendingOnly) { $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none'; if (!isAdmin){ showPendingOnly=false; $btnPendingOnly.classList.remove('on'); } }
+            if ($btnReportedOnly){ $btnReportedOnly.style.display = isAdmin ? 'inline-block' : 'none'; if (!isAdmin){ showReportedOnly=false; $btnReportedOnly.classList.remove('on'); } }
             resubscribe();
           }, ()=>{
-            isAdmin=false; $adminBadge.style.display='none'; $btnReports.style.display='none';
-            if ($btnPendingOnly) { $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on'); }
+            isAdmin=false; $adminBadge.style.display='none';
+            if ($btnPendingOnly){ $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on'); }
+            if ($btnReportedOnly){ $btnReportedOnly.style.display='none'; showReportedOnly=false; $btnReportedOnly.classList.remove('on'); }
             resubscribe();
           });
         } else {
@@ -518,8 +526,8 @@
       else { if (map.hasLayer(g)) map.removeLayer(g); }
       const btn = document.querySelector(`.flt[data-cat="${CSS.escape(key)}"]`);
       if (btn){ btn.classList.toggle('on', visible); }
-      markerMap.forEach((_, id)=> applyVisibility(id));
-      recomputeSeqs(); // 카테고리 토글 시 번호 재산출
+      applyAllVisibility();
+      recomputeSeqs();
     }
     function setAllCats(v){ CATEGORIES.forEach(c=> setCategoryVisible(c.key, v)); }
     function setWildVisible(v){
@@ -550,8 +558,15 @@
           if (!isAdmin) return;
           showPendingOnly = !showPendingOnly;
           $btnPendingOnly.classList.toggle('on', showPendingOnly);
-          markerMap.forEach((_, id)=> applyVisibility(id));
-          recomputeSeqs();
+          applyAllVisibility(); recomputeSeqs();
+        };
+      }
+      if ($btnReportedOnly) {
+        $btnReportedOnly.onclick = ()=>{
+          if (!isAdmin) return;
+          showReportedOnly = !showReportedOnly;
+          $btnReportedOnly.classList.toggle('on', showReportedOnly);
+          applyAllVisibility(); recomputeSeqs();
         };
       }
     }
@@ -566,8 +581,8 @@
     let textFilter = ''; // lowercased
     function applyTextFilter(q){
       textFilter = norm(q||'');
-      markerMap.forEach((_, id)=> applyVisibility(id));
-      recomputeSeqs(); // 검색어 변경 시 번호 재산출
+      applyAllVisibility(); // 검색어 변경 시 즉시 반영
+      recomputeSeqs();
     }
     qSearch.onclick = ()=> { const q = qInput.value.trim(); applyTextFilter(q); if (q) logQuery(q).catch(()=>{}); };
     qInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ qSearch.click(); }});
@@ -681,14 +696,23 @@
       const catOn = catVisible.get(m.category) !== false;
       const hiddenForUser = isHiddenByReport(m) && !isAdmin;
       const txtOk = matchText(m);
+
+      // 기본 승인 상태 필터
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
-      const ok = catOn && !hiddenForUser && txtOk && statusOk;
+
+      // 관리자 '신고 목록' 토글: 최근 48시간 내 pending 신고가 있는 핀만
+      const reportedOk = isAdmin
+        ? (showReportedOnly ? reportedSet.has(m.id) : true)
+        : true;
+
+      const ok = catOn && !hiddenForUser && txtOk && statusOk && reportedOk;
       if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
       else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
     }
+    function applyAllVisibility(){ markerMap.forEach((_, id)=> applyVisibility(id)); }
 
     // 48시간 경과 자동 복귀(1분마다 재평가)
-    setInterval(()=> { markerMap.forEach((_, id)=> applyVisibility(id)); recomputeSeqs(); }, 60*1000);
+    setInterval(()=> { applyAllVisibility(); recomputeSeqs(); }, 60*1000);
 
     async function reportMarker(m, reason){
       if (!firebaseOk) return { ok:false, hid:false };
@@ -739,11 +763,12 @@
     /* ---------- 동적 시퀀스(고유번호) 재계산 ---------- */
     function visibleForSeq(m){
       if (!m) return false;
-      if (isHiddenByReport(m)) return false;
+      if (isHiddenByReport(m) && !isAdmin) return false;
       if (catVisible.get(m.category) === false) return false;
       if (!matchText(m)) return false;
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
-      return !!statusOk;
+      const reportedOk = isAdmin ? (showReportedOnly ? reportedSet.has(m.id) : true) : true;
+      return !!(statusOk && reportedOk);
     }
 
     function recomputeSeqs(){
@@ -1095,104 +1120,7 @@
       }
     };
 
-    /* ---------------- 관리자: 신고목록 ---------------- */
-    const $rmodal = document.getElementById('rmodal');
-    const $rclose = document.getElementById('rclose');
-    const $rlist  = document.getElementById('rlist');
-    let unsubReports = null;
-
-    document.getElementById('btnReports').onclick = ()=>{
-      if (!firebaseOk) { alert('네트워크 차단으로 신고목록 불가'); return; }
-      openReports();
-    };
-    $rclose.onclick = ()=>{ if (unsubReports){unsubReports();unsubReports=null;} $rmodal.style.display='none'; };
-
-    function openReports(){
-      $rmodal.style.display='flex';
-      if (unsubReports){unsubReports();unsubReports=null;}
-
-      const qR = query(collectionGroup(db,'reports'), where('status','==','pending'));
-
-      unsubReports = onSnapshot(
-        qR,
-        snap=>{
-          const now = nowMs();
-          const items = [];
-          snap.forEach(d=>{
-            const r = d.data();
-            const created = toMs(r.createdAt);
-            const within48h = created ? (now - created) <= HIDE_MS : true;
-            if (!within48h) return;
-            items.push({ id:d.id, path:d.ref.path, createdAt: created, ...r });
-          });
-          items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-          renderReportList(items);
-        },
-        err=>{
-          console.error('[reports] onSnapshot error:', err);
-          $rlist.innerHTML = `
-            <div style="background:#291; padding:10px; border-radius:8px">
-              신고목록을 불러오지 못했습니다.<br>
-              <div style="margin-top:6px; font-size:12px; opacity:.8">
-                • Firestore 규칙에 <code>match /{path=**}/reports/{rid}</code> 읽기 권한(관리자)을 추가했는지 확인<br>
-                • 컬렉션 그룹 인덱스(reports, status[, createdAt])를 생성했는지 확인
-              </div>
-            </div>`;
-        }
-      );
-    }
-    function pathInfo(rep){
-      const seg = rep.path.split('/');
-      if (seg.length===4) return { type:'marker', markerId: seg[1], commentId: null, reportId: seg[3], path: rep.path };
-      if (seg.length===6) return { type:'comment', markerId: seg[1], commentId: seg[3], reportId: seg[5], path: rep.path };
-      return { type: rep.type || 'marker', markerId: rep.markerId, commentId: rep.commentId, reportId: rep.id, path: rep.path };
-    }
-    function renderReportList(list){
-      if (!list.length){ $rlist.innerHTML = `<div style="opacity:.8">표시할 신고가 없습니다.</div>`; return; }
-      $rlist.innerHTML = list.map((r,i)=>{
-        const inf = pathInfo(r);
-        const when = new Date(toMs(r.createdAt)).toLocaleString();
-        const what = (inf.type==='comment') ? `댓글 신고` : `핀 신고`;
-        return `
-          <div class="ritem">
-            <div class="meta"><b>${what}</b>
-              <span>마커ID: ${inf.markerId}${inf.commentId?` · 댓글ID: ${inf.commentId}`:''}</span>
-              <span>${when}</span></div>
-            <div style="margin-top:6px; white-space:pre-wrap">${esc(r.reason||'')}</div>
-            <div class="act">
-              <button class="primary" data-goto="${i}">핀으로 이동</button>
-              <button class="warn" data-reject="${i}">신고 반려</button>
-            </div>
-          </div>`;
-      }).join('');
-      $rlist.querySelectorAll('[data-goto]').forEach(btn=>{
-        btn.onclick = ()=>{
-          const r = list[+btn.getAttribute('data-goto')];
-          const inf = pathInfo(r);
-          const rec = markerMap.get(inf.markerId);
-          if (rec){
-            map.setView([rec.data.y, rec.data.x], Math.max(0, map.getZoom()));
-            openInfoWithSeq(rec.data);
-            if (inf.type==='comment' && document.getElementById('c-'+inf.commentId)){
-              document.getElementById('c-'+inf.commentId).scrollIntoView({behavior:'smooth', block:'center'});
-            }
-          }else{
-            alert('해당 마커가 현재 화면에 없습니다(숨김/필터/미승인 등).');
-          }
-        };
-      });
-      $rlist.querySelectorAll('[data-reject]').forEach(btn=>{
-        btn.onclick = async ()=>{
-          const r = list[+btn.getAttribute('data-reject')];
-          const inf = pathInfo(r);
-          await updateDoc(doc(db, ...inf.path.split('/')), { status:'rejected' });
-          await recomputeHiddenUntil(inf.markerId);
-          alert('신고를 반려했습니다. (필요시 자동 노출)');
-        };
-      });
-    }
-
-    // 통합 검색 매칭 (제목/본문 + 포켓몬 태그)
+    /* ---------------- 통합 검색 매칭 (제목/본문 + 포켓몬 태그) ---------------- */
     function matchText(m){
       if (!textFilter) return true;
       const q = textFilter;
