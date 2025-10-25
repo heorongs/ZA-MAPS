@@ -393,7 +393,7 @@
     const $adminBadge = document.getElementById('adminBadge');
     const $btnPendingOnly = document.getElementById('fltPending');
     const $btnAdminReport = document.getElementById('btnAdminReport');
-    let me=null, isAdmin=false;
+    let me=null, isAdmin=false, unsubAdminDoc=null;
 
     $login.onclick = async () => {
       if (!firebaseOk) { alert('네트워크 차단으로 로그인 불가'); return; }
@@ -404,9 +404,6 @@
 
     if (firebaseOk) getRedirectResult(auth).catch(()=>{});
 
-    function resubscribe(){ subscribeMarkers(); subscribeReportedCommentsAdmin(); }
-
-    // ---- 관리자 UI 동기화 및 다양한 스키마 지원 ----
     function applyAdminUI() {
       $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
       $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
@@ -417,51 +414,8 @@
         if (adminReportMode) setAdminReportMode(false);
       }
       applyAllVisibility();
-      resubscribe();
-    }
-
-    let unsubAdminWatch = null;
-    function startAdminWatch(user){
-      if (unsubAdminWatch){ try{unsubAdminWatch();}catch{} unsubAdminWatch=null; }
-      if (!user){ isAdmin=false; applyAdminUI(); return; }
-
-      const emailLower = (user.email || '').toLowerCase().trim();
-      const stops = [];
-      let found = false;
-      const setFound = (v)=> {
-        if (v && !found) { found = true; isAdmin = true; applyAdminUI(); }
-      };
-
-      const safeDocListen = (pathArr)=>{
-        try{
-          const r = doc(db, ...pathArr);
-          return onSnapshot(r, s=> setFound(s.exists()), err=> console.warn('[admin doc listen]', pathArr.join('/'), err));
-        }catch(e){ console.warn('[admin doc build]', pathArr, e); return ()=>{}; }
-      };
-      const safeQueryListen = (qObj)=>{
-        try{
-          return onSnapshot(qObj, s=> setFound(!s.empty), err=> console.warn('[admin query listen]', err));
-        }catch(e){ console.warn('[admin query build]', e); return ()=>{}; }
-      };
-
-      // 1) 문서 ID = uid
-      stops.push(safeDocListen(['admins', user.uid]));
-      // 2) 문서 ID = email
-      if (emailLower) stops.push(safeDocListen(['admins', emailLower]));
-      // 3) 필드 버전
-      stops.push(safeQueryListen(query(collection(db,'admins'), where('uid','==', user.uid))));
-      if (emailLower) stops.push(safeQueryListen(query(collection(db,'admins'), where('email','==', emailLower))));
-      // 4) 배열 버전
-      stops.push(safeQueryListen(query(collection(db,'admins'), where('uids','array-contains', user.uid))));
-      if (emailLower) stops.push(safeQueryListen(query(collection(db,'admins'), where('emails','array-contains', emailLower))));
-
-      // 5) 타임아웃 보호: 못 찾으면 일반 유저 UI
-      const timer = setTimeout(()=>{ if (!found) { isAdmin=false; applyAdminUI(); } }, 1500);
-
-      unsubAdminWatch = ()=> {
-        clearTimeout(timer);
-        stops.forEach(fn=> { try{ fn(); }catch{} });
-      };
+      subscribeMarkers();
+      subscribeReportedCommentsAdmin();
     }
 
     if (firebaseOk){
@@ -471,9 +425,26 @@
         document.getElementById('login').style.display=me?'none':'inline-block';
         document.getElementById('logout').style.display=me?'inline-block':'none';
 
-        isAdmin=false; // 기본값
+        // admins/{uid} 방식만 사용
+        try { if (unsubAdminDoc) { unsubAdminDoc(); } } catch {}
+        isAdmin = false;
         applyAdminUI();
-        startAdminWatch(me);
+
+        if (me){
+          try{
+            const r = doc(db,'admins', me.uid);
+            unsubAdminDoc = onSnapshot(r, s=>{
+              isAdmin = s.exists();
+              applyAdminUI();
+            }, err=>{
+              console.warn('[admins/{uid}] listen error', err);
+              isAdmin = false; applyAdminUI();
+            });
+          }catch(e){
+            console.warn('[admins/{uid}] build error', e);
+            isAdmin = false; applyAdminUI();
+          }
+        }
       });
     }
 
@@ -993,10 +964,6 @@
       const cd = cs.data()||{};
       if (cd.reportsBlocked){ alert('관리자에 의해 이 댓글은 신고가 차단되었습니다.'); return; }
 
-      try{
-        if (cd.reportsBlocked){ alert('이 댓글은 신고 차단 상태입니다.'); return; }
-      }catch(_e){}
-
       await addDoc(collection(db,'markers', markerId, 'comments', commentId, 'reports'), {
         type:'comment', markerId, commentId, uid: me?.uid||null, reason,
         status:'pending', createdAt: serverTimestamp()
@@ -1425,7 +1392,11 @@
     document.getElementById('cancelBtn').onclick=()=>{ modal.style.display='none'; pending=null; };
     modal.addEventListener('click', (e)=>{ if(e.target===modal){ modal.style.display='none'; pending=null; } });
     window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.style.display==='flex'){ modal.style.display='none'; pending=null; }});
-    nickSel.onchange()=> nickCus.style.display=(nickSel.value==='custom')?'block':'none';
+
+    // ❗ 문법 오류를 고친 라인 (흰 화면 방지)
+    nickSel.onchange = () => {
+      nickCus.style.display = (nickSel.value==='custom') ? 'block' : 'none';
+    };
 
     // 포켓몬 편집기
     const pkEditor = document.getElementById('pkEditor');
