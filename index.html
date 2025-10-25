@@ -232,7 +232,7 @@
         <div id="pkChips" class="pk-tags" style="margin-top:6px"></div>
       </div>
 
-      <!-- ✅ 선택 업로드로 변경 -->
+      <!-- 선택 업로드 -->
       <label style="display:block;margin-top:8px">사진(선택, 여러장 가능)</label>
       <input id="mImgs" class="inp" type="file" accept="image/*" multiple />
       <label style="display:block;margin-top:8px">동영상(선택, 1개 권장)</label>
@@ -406,33 +406,74 @@
 
     function resubscribe(){ subscribeMarkers(); subscribeReportedCommentsAdmin(); }
 
+    // ---- 관리자 UI 동기화 및 다양한 스키마 지원 ----
+    function applyAdminUI() {
+      $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
+      $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
+      $btnAdminReport.style.display = isAdmin ? 'inline-block' : 'none';
+      if (!isAdmin) {
+        showPendingOnly = false;
+        $btnPendingOnly.classList.remove('on');
+        if (adminReportMode) setAdminReportMode(false);
+      }
+      applyAllVisibility();
+      resubscribe();
+    }
+
+    let unsubAdminWatch = null;
+    function startAdminWatch(user){
+      if (unsubAdminWatch){ try{unsubAdminWatch();}catch{} unsubAdminWatch=null; }
+      if (!user){ isAdmin=false; applyAdminUI(); return; }
+
+      const emailLower = (user.email || '').toLowerCase().trim();
+      const stops = [];
+      let found = false;
+      const setFound = (v)=> {
+        if (v && !found) { found = true; isAdmin = true; applyAdminUI(); }
+      };
+
+      const safeDocListen = (pathArr)=>{
+        try{
+          const r = doc(db, ...pathArr);
+          return onSnapshot(r, s=> setFound(s.exists()), err=> console.warn('[admin doc listen]', pathArr.join('/'), err));
+        }catch(e){ console.warn('[admin doc build]', pathArr, e); return ()=>{}; }
+      };
+      const safeQueryListen = (qObj)=>{
+        try{
+          return onSnapshot(qObj, s=> setFound(!s.empty), err=> console.warn('[admin query listen]', err));
+        }catch(e){ console.warn('[admin query build]', e); return ()=>{}; }
+      };
+
+      // 1) 문서 ID = uid
+      stops.push(safeDocListen(['admins', user.uid]));
+      // 2) 문서 ID = email
+      if (emailLower) stops.push(safeDocListen(['admins', emailLower]));
+      // 3) 필드 버전
+      stops.push(safeQueryListen(query(collection(db,'admins'), where('uid','==', user.uid))));
+      if (emailLower) stops.push(safeQueryListen(query(collection(db,'admins'), where('email','==', emailLower))));
+      // 4) 배열 버전
+      stops.push(safeQueryListen(query(collection(db,'admins'), where('uids','array-contains', user.uid))));
+      if (emailLower) stops.push(safeQueryListen(query(collection(db,'admins'), where('emails','array-contains', emailLower))));
+
+      // 5) 타임아웃 보호: 못 찾으면 일반 유저 UI
+      const timer = setTimeout(()=>{ if (!found) { isAdmin=false; applyAdminUI(); } }, 1500);
+
+      unsubAdminWatch = ()=> {
+        clearTimeout(timer);
+        stops.forEach(fn=> { try{ fn(); }catch{} });
+      };
+    }
+
     if (firebaseOk){
       onAuthStateChanged(auth, async (user)=>{
         me=user||null;
         document.getElementById('who').textContent=me?(me.displayName || '로그인됨'):'로그인 안 됨';
         document.getElementById('login').style.display=me?'none':'inline-block';
         document.getElementById('logout').style.display=me?'inline-block':'none';
-        isAdmin=false; $adminBadge.style.display='none';
-        $btnPendingOnly.style.display='none'; showPendingOnly=false; $btnPendingOnly.classList.remove('on');
-        $btnAdminReport.style.display='none'; setAdminReportMode(false);
 
-        if (me){
-          onSnapshot(doc(db,'admins', me.uid), s=>{
-            isAdmin = s.exists();
-            $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
-            $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
-            $btnAdminReport.style.display = isAdmin ? 'inline-block' : 'none';
-            resubscribe();
-          }, ()=>{
-            isAdmin=false; $adminBadge.style.display='none';
-            $btnPendingOnly.style.display='none';
-            $btnAdminReport.style.display='none';
-            setAdminReportMode(false);
-            resubscribe();
-          });
-        } else {
-          resubscribe();
-        }
+        isAdmin=false; // 기본값
+        applyAdminUI();
+        startAdminWatch(me);
       });
     }
 
@@ -926,7 +967,6 @@
       const statusOk = isAdmin ? (showPendingOnly ? m.status==='pending' : true) : (m.status==='approved');
 
       const ok = catOn && !hiddenForUser && txtOk && statusOk;
-      if (ok){ if (!group.hasLayer(g)) m; } // (no-op safeguard)
       if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
       else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
     }
@@ -1094,7 +1134,7 @@
 
     function openComments(marker){
       if (!firebaseOk) { $cForm.style.display='none'; $cList.innerHTML=''; return; }
-      if (unsubComments){ unsubComments();unsubComments=null; }
+      if (unsubComments){unsubComments();unsubComments=null; }
       $cForm.style.display = me ? 'block':'none';
       $cBody.value='';
       const qC = query(collection(db,'markers', marker.id, 'comments'), orderBy('createdAt','asc'));
@@ -1385,7 +1425,7 @@
     document.getElementById('cancelBtn').onclick=()=>{ modal.style.display='none'; pending=null; };
     modal.addEventListener('click', (e)=>{ if(e.target===modal){ modal.style.display='none'; pending=null; } });
     window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.style.display==='flex'){ modal.style.display='none'; pending=null; }});
-    nickSel.onchange=()=> nickCus.style.display=(nickSel.value==='custom')?'block':'none';
+    nickSel.onchange()=> nickCus.style.display=(nickSel.value==='custom')?'block':'none';
 
     // 포켓몬 편집기
     const pkEditor = document.getElementById('pkEditor');
@@ -1423,8 +1463,6 @@
       const imgFiles = imgsInp.files ? Array.from(imgsInp.files) : [];
       const vidFile  = (videoInp.files && videoInp.files[0]) ? videoInp.files[0] : null;
 
-      // ✅ 사진/영상 없이도 등록 가능 (검사 제거)
-
       const saveBtn = document.getElementById('saveBtn');
       const setBtn  = (t)=> saveBtn.textContent = t;
       const prevTxt = saveBtn.textContent;
@@ -1444,7 +1482,6 @@
           media.push({type:'video', url});
         }
 
-        // ✅ 미디어가 없어도 안전
         const thumbUrl = media.length ? media[0].url : null;
 
         setBtn('저장 중…');
@@ -1453,7 +1490,7 @@
           x: pending.lng, y: pending.lat,
           title: t.value, body: b.value,
           category: catSel.value,
-          media, thumbUrl, // null일 수 있음
+          media, thumbUrl, // null 가능
           displayName, authorUid: me.uid,
           createdAt: serverTimestamp(),
           status: 'pending',
