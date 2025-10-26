@@ -98,6 +98,15 @@
     #panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px}
     #panel input,#panel textarea,#panel select{width:100%; box-sizing:border-box}
     small.muted{color:#a0a7b4}
+
+    /* 얌전한 인앱 안내 배너 */
+    #inapp-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 2999;
+      background: linear-gradient(90deg,#0f172aee,#111827ee);
+      color: #e5e7eb; font-size: 13px; line-height: 1.4;
+      padding: 10px 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,.35);
+    }
+    #inapp-banner strong{ color:#fff; font-weight:600 }
   </style>
 </head>
 <body>
@@ -109,52 +118,19 @@
   </div>
   <script> setTimeout(()=>{ if(!window.L){ document.getElementById('blockWarn').style.display='flex'; } }, 1500); </script>
 
-  <!-- ✅ 인앱 브라우저 감지 & 외부 브라우저로 열기 배너 -->
+  <!-- ✅ 인앱 브라우저 감지: 안내 문구만 표시 (버튼 없음) -->
   <script>
   (function(){
-    const INAPP_PATTERNS = [
-      /KAKAOTALK/i, /Line\//i, /Instagram/i, /FBAN|FBAV/i, /Twitter/i, /Snapchat/i, /MicroMessenger/i
-    ];
-    function inAppBrowser(){ const ua=navigator.userAgent||''; return INAPP_PATTERNS.some(r=>r.test(ua)); }
-    function openExternally(url){
-      try{
-        const w = window.open(url, '_blank'); if (w) return true;
-        if (/Android/i.test(navigator.userAgent)){
-          const intentUrl = 'intent://' + url.replace(/^https?:\/\//,'') + '#Intent;scheme=https;package=com.android.chrome;end';
-          window.location.href=intentUrl; return true;
-        }
-        window.location.href=url; return true;
-      }catch(e){ console.warn('external open failed', e); return false; }
-    }
-    function showOpenBanner(externalUrl){
-      if (document.getElementById('inapp-open-banner')) return;
-      const wrap = document.createElement('div');
-      wrap.id='inapp-open-banner';
-      wrap.innerHTML = `
-        <div style="position:fixed;top:0;left:0;right:0;z-index:2999;background:linear-gradient(90deg,#111e,#162030);
-          color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;font-size:14px;gap:12px;box-shadow:0 4px 12px rgba(0,0,0,.4);">
-          <div style="display:flex;flex-direction:column;gap:4px;max-width:70%;">
-            <div>앱 내 브라우저에서 접속 중입니다 — 외부 브라우저로 열어보시겠어요?</div>
-            <div style="font-size:12px;opacity:.9">
-              일부 인앱 브라우저에서는 <b>Google 로그인</b> 등 기능이 정상 동작하지 않을 수 있습니다.
-              외부 브라우저(Chrome/Safari) 사용을 권장합니다.
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;white-space:nowrap">
-            <button id="btn-open-external" style="background:#3d6cff;color:#fff;border:0;padding:6px 10px;border-radius:8px;cursor:pointer">외부 브라우저로 열기</button>
-            <button id="btn-open-close" style="background:transparent;color:#cfd8dc;border:1px solid #2b3345;padding:6px 10px;border-radius:8px;cursor:pointer">닫기</button>
-          </div>
-        </div>`;
-      document.body.appendChild(wrap);
-      document.getElementById('btn-open-external').onclick = ()=>{
-        const ok = openExternally(externalUrl || location.href);
-        if (!ok) alert('외부 브라우저로 열지 못했습니다. 브라우저 메뉴에서 "외부 브라우저로 열기"를 선택해 주세요.');
-        wrap.remove();
-      };
-      document.getElementById('btn-open-close').onclick = ()=> wrap.remove();
-    }
-    function init(){ if (!inAppBrowser()) return; showOpenBanner(location.href); }
-    if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', init, {once:true}); else init();
+    const PATTERNS = [/KAKAOTALK/i, /Line\//i, /Instagram/i, /FBAN|FBAV/i, /Twitter/i, /Snapchat/i, /MicroMessenger/i];
+    const isInApp = PATTERNS.some(r => r.test(navigator.userAgent||''));
+    if (!isInApp) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'inapp-banner';
+    banner.innerHTML = '<strong>안내</strong> · 앱 내 브라우저에서 접속 중입니다. ' +
+      '일부 기능(특히 <strong>Google 로그인/업로드/팝업</strong>)이 제한되거나 동작하지 않을 수 있어요. ' +
+      'Chrome/Safari 등 <strong>외부 브라우저 이용</strong>을 권장합니다.';
+    document.body.appendChild(banner);
   })();
   </script>
 
@@ -474,7 +450,6 @@
         document.getElementById('login').style.display=me?'none':'inline-block';
         document.getElementById('logout').style.display=me?'inline-block':'none';
 
-        // admins/{uid} 방식만 사용
         try { if (unsubAdminDoc) { unsubAdminDoc(); } } catch {}
         isAdmin = false;
         applyAdminUI();
@@ -1272,6 +1247,14 @@
 
     async function openInfo(m, seqNum){
       currentOpenId=m.id;
+      const $infoTitle=document.getElementById('infoTitle');
+      const $infoId=document.getElementById('infoId');
+      const $infoMeta=document.getElementById('infoMeta');
+      const $infoMediaTop=document.getElementById('infoMediaTop');
+      const $infoBody=document.getElementById('infoBody');
+      const $infoPk=document.getElementById('infoPk');
+      const $infoBtns=document.getElementById('infoBtns');
+
       $infoTitle.textContent=m.title||'(제목 없음)';
       $infoId.textContent = seqNum ? '#'+seqNum : '#-';
       const statusText = m.status || 'pending';
@@ -1542,4 +1525,4 @@
     subscribeReportedCommentsAdmin();
   </script>
 </body>
-</html>
+  </html>
