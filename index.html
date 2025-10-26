@@ -17,6 +17,17 @@
     #adminBadge{display:none;background:#ffd54f;color:#111;padding:2px 6px;border-radius:8px}
     .tbtn{background:#2a2f3a;color:#ddd;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
     .tbtn.on{background:#3d6cff;color:#fff}
+
+    /* 우측 상단 컨트롤 (공지/메신저) */
+    .top-right {
+      position: fixed; right:10px; top:10px; z-index: 1400;
+      display:flex; gap:8px; align-items:center;
+    }
+    .pill-btn { position:relative; background:#2a2f3a; color:#ddd; border:0; border-radius:999px; padding:6px 12px; cursor:pointer }
+    .pill-btn.on { background:#3d6cff; color:#fff }
+    .pill-btn .bang { position:absolute; left:-6px; top:-6px; width:16px; height:16px; border-radius:50%; background:#ff5252; color:#fff; font-size:11px; display:none; align-items:center; justify-content:center }
+    .pill-btn .bang.show { display:flex }
+
     /* 좌측 검색 사이드 */
     #side{
       position:fixed; z-index:1300; left:10px; top:60px; bottom:10px;
@@ -93,10 +104,11 @@
     .badge-report{background:#ff9800;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
     .badge-hidden{background:#90caf9;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
 
-    /* 입력 모달 */
-    #modal{display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;}
-    #panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px}
-    #panel input,#panel textarea,#panel select{width:100%; box-sizing:border-box}
+    /* 입력/설정 모달 */
+    #modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal{display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;}
+    .panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px}
+    .panel.wide{width:min(720px, 96vw)}
+    .panel input,.panel textarea,.panel select{width:100%; box-sizing:border-box}
     small.muted{color:#a0a7b4}
 
     /* 얌전한 인앱 안내 배너 */
@@ -107,6 +119,22 @@
       padding: 10px 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,.35);
     }
     #inapp-banner strong{ color:#fff; font-weight:600 }
+
+    /* 공지 특수 메시지(관리진 메신저 안에서 풀폭) */
+    .sys-notice {
+      background:#0b3a70; color:#e6f1ff; border-radius:12px; padding:16px; margin:8px 0;
+    }
+    .sys-notice h4{ margin:0 0 6px 0; font-size:16px }
+    .sys-notice p{ margin:0; opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
+    /* 메신저 채팅 버블 */
+    .chat-wrap { max-height:60vh; overflow:auto; background:#0f1116; border:1px solid #2b3143; border-radius:12px; padding:12px }
+    .chat-row { display:flex; margin:6px 0 }
+    .chat-row.me { justify-content:flex-start }
+    .chat-row.other { justify-content:flex-end }
+    .bubble { max-width:70%; background:#1f2430; color:#e5e7eb; padding:8px 10px; border-radius:12px }
+    .chat-row.other .bubble { background:#293146 }
+    .chat-meta { font-size:11px; color:#aab; margin-top:4px }
   </style>
 </head>
 <body>
@@ -138,11 +166,18 @@
     <span id="who">로그인 안 됨</span>
     <button id="login">Google 로그인</button>
     <button id="logout" style="display:none">로그아웃</button>
+    <button id="btnProfile" class="tbtn" style="display:none">프로필</button>
     <span id="adminBadge">관리자</span>
     <span style="width:1px;height:20px;background:#2f3545;margin:0 6px"></span>
     <button id="btnSearch" class="tbtn on">검색 모드</button>
     <button id="btnPlace"  class="tbtn">핀 배치 모드</button>
     <button id="btnAdminReport" class="tbtn" style="display:none">신고 관리 모드</button>
+  </div>
+
+  <!-- 우측 상단: 공지 / 메신저 -->
+  <div class="top-right">
+    <button id="btnNoticeList" class="pill-btn">공지</button>
+    <button id="btnMsg" class="pill-btn" style="display:none">메세지 <span class="bang" id="msgBang">!</span></button>
   </div>
 
   <!-- 좌측 사이드 -->
@@ -227,20 +262,12 @@
 
   <!-- 마커 입력 모달 -->
   <div id="modal">
-    <div id="panel">
+    <div class="panel">
       <h3>마커 추가 (검수 대기)</h3>
       <input id="mTitle" class="inp" placeholder="제목" />
       <textarea id="mBody" class="inp" rows="4" placeholder="공략/설명(줄바꿈 가능)"></textarea>
 
-      <label style="display:block;margin-top:6px">닉네임 표시</label>
-      <div class="row">
-        <select id="mNickSel" class="inp">
-          <option value="me">내 구글 닉네임</option>
-          <option value="anon">익명</option>
-          <option value="custom">커스텀</option>
-        </select>
-        <input id="mNickCustom" class="inp" placeholder="커스텀 닉네임" style="display:none;"/>
-      </div>
+      <!-- ✅ 닉네임 선택 UI 제거: 프로필의 닉네임/랭크로만 표기 -->
 
       <label style="display:block;margin-top:8px">카테고리</label>
       <select id="mCat" class="inp"></select>
@@ -266,6 +293,92 @@
         <button id="cancelBtn">취소</button>
         <button id="saveBtn">등록</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ✅ 프로필 모달 -->
+  <div id="profileModal">
+    <div class="panel">
+      <h3>프로필 설정</h3>
+      <div id="pfWho" style="font-size:12px; opacity:.8; margin-bottom:6px">(로그인 필요)</div>
+      <label>닉네임</label>
+      <input id="pfNick" class="inp" maxlength="24" placeholder="지도에 표시될 이름" />
+      <div class="hr"></div>
+      <div><strong>내 랭크</strong> · <span id="pfRank">(Z)</span></div>
+      <div style="font-size:12px; opacity:.85; margin:6px 0">다음 랭크까지 <span id="pfRemain">-</span></div>
+      <div style="font-size:12px; opacity:.85">경험치 얻는 법: 핀 등록(+100 XP), 댓글(+10 XP)</div>
+      <div class="hr"></div>
+      <div style="text-align:right">
+        <button id="pfClose">닫기</button>
+        <button id="pfSave" class="tbtn on">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ 관리자 메신저 모달 -->
+  <div id="messengerModal">
+    <div class="panel wide">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        관리진 메신저
+        <span>
+          <button id="msgClose" class="tbtn">닫기</button>
+        </span>
+      </h3>
+      <div id="chatBox" class="chat-wrap"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="msgInput" class="inp" placeholder="메세지 입력…" />
+        <button id="msgSend" class="tbtn on">보내기</button>
+      </div>
+      <div style="font-size:12px;opacity:.75;margin-top:6px">* 내가 보낸 메세지는 좌측, 다른 관리자가 보낸 메세지는 우측에 표시됩니다.</div>
+    </div>
+  </div>
+
+  <!-- ✅ 공지 작성/보기 모달 -->
+  <div id="noticeModal">
+    <div class="panel wide">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        공지
+        <span>
+          <button id="noticeClose" class="tbtn">닫기</button>
+        </span>
+      </h3>
+      <div id="noticeView" style="display:none">
+        <div style="font-size:12px;opacity:.8;margin-bottom:6px" id="noticeDate"></div>
+        <h3 id="noticeTitle"></h3>
+        <div id="noticeBody" style="white-space:pre-wrap;margin-top:8px"></div>
+        <div id="noticeFiles" style="margin-top:10px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px" id="noticeAdminBtns"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+          <button id="noticeHide24" class="tbtn">24시간 동안 안뜨게</button>
+          <button id="noticeDismiss" class="tbtn">닫기</button>
+        </div>
+      </div>
+      <div id="noticeEdit" style="display:none">
+        <label>제목</label>
+        <input id="ntTitle" class="inp" maxlength="80" />
+        <label style="margin-top:8px;display:block">내용</label>
+        <textarea id="ntBody" class="inp" rows="6"></textarea>
+        <label style="margin-top:8px;display:block">파일 첨부(선택, 여러 개)</label>
+        <input id="ntFiles" class="inp" type="file" multiple />
+        <div style="text-align:right;margin-top:10px">
+          <button id="ntCancel" class="tbtn">취소</button>
+          <button id="ntSave" class="tbtn on">작성 완료</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ 공지 목록 모달 -->
+  <div id="noticeListModal">
+    <div class="panel wide">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        공지 목록
+        <span style="display:flex;gap:8px;align-items:center">
+          <button id="ntNew" class="tbtn" style="display:none">공지 작성</button>
+          <button id="ntListClose" class="tbtn">닫기</button>
+        </span>
+      </h3>
+      <div id="ntListWrap" style="max-height:60vh;overflow:auto"></div>
     </div>
   </div>
 
@@ -313,7 +426,7 @@
     let app, auth, db, st;
     let GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged;
     let collection, collectionGroup, addDoc, serverTimestamp, onSnapshot,
-        orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment;
+        orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit;
     let ref, getDownloadURL, uploadBytesResumable, uploadBytes;
 
     try {
@@ -337,7 +450,7 @@
       db   = fsMod.getFirestore(app);
       st   = stMod.getStorage(app);
       ({ GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } = authMod);
-      ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment } = fsMod);
+      ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit } = fsMod);
       ({ ref, getDownloadURL, uploadBytesResumable, uploadBytes } = stMod);
     } catch (e) {
       firebaseOk = false;
@@ -387,7 +500,7 @@
       {key:'보물',           label:'보물',           defaultIcon:'treasure.png'},
       {key:'기타 아이템',     label:'기타 아이템',     defaultIcon:'other_item.png'},
       {key:'메인 임무',       label:'메인 임무',       defaultIcon:'main_mission.png'},
-      {key:'사이드 임무',     label:'사이드 임무',       defaultIcon:'side_mission.png'},
+      {key:'사이드 임무',       label:'사이드 임무',       defaultIcon:'side_mission.png'},
       {key:'승급전',         label:'승급전',         defaultIcon:'promotion_match.png'},
       {key:'사다리',         label:'사다리',         defaultIcon:'ladder.png'},
       {key:'NPC',            label:'NPC',            defaultIcon:'npc.png'},
@@ -406,19 +519,115 @@
       });
     }
     const labelFor=(key)=> CATEGORIES.find(c=>c.key===key)?.label || key;
-    const defaultIconFor=(key)=> {
+    const defaultIconFor=(key)=>{
       const def = CATEGORIES.find(c=>c.key===key)?.defaultIcon;
       return def ? `icons/${def}` : `icons/default.png`;
     };
 
-    /* ---------------- 로그인/관리자 상태 ---------------- */
+    /* ---------------- 로그인/관리자 상태 + 프로필/랭크 ---------------- */
     const $who = document.getElementById('who');
     const $login = document.getElementById('login');
     const $logout = document.getElementById('logout');
+    const $btnProfile = document.getElementById('btnProfile');
     const $adminBadge = document.getElementById('adminBadge');
     const $btnPendingOnly = document.getElementById('fltPending');
     const $btnAdminReport = document.getElementById('btnAdminReport');
+    const $btnMsg = document.getElementById('btnMsg');
+    const $msgBang = document.getElementById('msgBang');
     let me=null, isAdmin=false, unsubAdminDoc=null;
+
+    // 랭크 정의: Z → A (지수식 난이도), A 이후 + 최대 5, 초과시 ? 전환
+    const RANKS = 'ZYXWVUTSRQPONMLKJIHGFEDCBA'.split('');
+    const PIN_XP = 100, CMT_XP = 10;
+    const FIRST_PIN_AUTO_UP = true; // Z → Y 한 번에
+    function xpForRankIndex(i){ // i=0(Z)~25(A) 까지의 누적 필요치
+      // 누적 XP 테이블(지수성장). Z에서 Y는 0 → 100, 이후 *2씩 증가형 누적.
+      let req=0, step=100;
+      for(let k=0;k<i;k++){ req += step; step*=2; }
+      return req;
+    }
+    function totalToRank(totalXP){
+      // A 초과 처리(+)
+      const aIdx = RANKS.length-1; // 25
+      const aNeed = xpForRankIndex(aIdx);
+      if (totalXP < aNeed){
+        // 찾기
+        let idx=0;
+        while(idx<RANKS.length && xpForRankIndex(idx)<=totalXP) idx++;
+        idx = Math.max(0, idx-1);
+        const curNeed = xpForRankIndex(idx);
+        const nextNeed = xpForRankIndex(Math.min(idx+1, aIdx));
+        return { idx, rank:RANKS[idx], plus:0, cur: totalXP-curNeed, next: Math.max(0, nextNeed-totalXP), cap:false, q:false };
+      }
+      // A 이상
+      const over = totalXP - aNeed;
+      // + 하나당 대략 50,000 XP 필요(지수 누적 보정). 5개까지.
+      const plusUnit = 50000;
+      let plus = Math.floor(over / plusUnit);
+      if (plus<=5){
+        const next = (plus<5) ? (plusUnit - (over % plusUnit)) : 0;
+        const cap = plus>=5;
+        return { idx:aIdx, rank:'A' + '+'.repeat(plus), plus, cur: over%plusUnit, next, cap, q:false };
+      }
+      // 5 초과 → ?
+      return { idx:aIdx, rank:'?', plus:999, cur:0, next:0, cap:true, q:true };
+    }
+
+    async function awardXP(kind){ // 'pin' | 'comment'
+      if (!firebaseOk || !me) return;
+      const pfRef = doc(db,'profiles', me.uid);
+      const snap = await getDoc(pfRef);
+      const data = snap.exists()? (snap.data()||{}) : {};
+      let xp = data.xp||0;
+      xp += (kind==='pin'? PIN_XP : CMT_XP);
+      let firstPinBoon=false;
+      if (kind==='pin' && FIRST_PIN_AUTO_UP && (data.rankCode||'Z')==='Z' && !(data.pinnedOnce)){
+        // 첫 핀 보너스: 바로 Y로
+        firstPinBoon = true;
+      }
+      // 랭크 재계산
+      const calc = totalToRank(xp);
+      let rankCode = calc.rank;
+      if (firstPinBoon) { rankCode = 'Y'; }
+      await setDoc(pfRef, {
+        uid: me.uid,
+        nick: data.nick || (me.displayName||'익명'),
+        xp,
+        rankCode,
+        pinnedOnce: data.pinnedOnce || (kind==='pin')
+      }, { merge:true });
+
+      if (calc.q){ alert('경고: 경험치를 더 쌓아도 랭크가 변하지 않습니다! (A+++++ 초과 → ?)'); }
+    }
+
+    function nameWithRank(nick, rankCode, isAdminFlag){
+      const tag = isAdminFlag ? '¿' : (rankCode||'Z').slice(-1); // A++++ -> 마지막 글자 A 표기, 요구사항은 "닉네임 • V" 형태
+      return `${nick||'익명'} • ${isAdminFlag ? '¿' : (rankCode||'Z')}`;
+    }
+
+    async function ensureProfileOnLogin(){
+      if (!firebaseOk || !me) return;
+      const pfRef = doc(db,'profiles', me.uid);
+      const snap = await getDoc(pfRef);
+      if (!snap.exists()){
+        // 최초 로그인 → 닉네임 선택 팝업
+        openProfile(true); // 강제 열기
+        alert('최초 로그인: 어떤 닉네임으로 활동할지 설정해주세요.\n설정하지 않으면 Google 닉네임으로 활동합니다.');
+        await setDoc(pfRef, {
+          uid: me.uid,
+          nick: me.displayName || '익명',
+          xp: 0,
+          rankCode: 'Z',
+          createdAt: serverTimestamp()
+        }, { merge:true });
+      } else {
+        // 로그인 표시 이름 교체
+        const data = snap.data()||{};
+        $who.innerHTML = `${esc(nameWithRank(data.nick, data.rankCode, isAdmin))}`;
+      }
+    }
+
+    const $btnNoticeList = document.getElementById('btnNoticeList');
 
     $login.onclick = async () => {
       if (!firebaseOk) { alert('네트워크 차단으로 로그인 불가'); return; }
@@ -433,6 +642,7 @@
       $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
       $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
       $btnAdminReport.style.display = isAdmin ? 'inline-block' : 'none';
+      $btnMsg.style.display = isAdmin ? 'inline-block' : 'none';
       if (!isAdmin) {
         showPendingOnly = false;
         $btnPendingOnly.classList.remove('on');
@@ -441,14 +651,16 @@
       applyAllVisibility();
       subscribeMarkers();
       subscribeReportedCommentsAdmin();
+      wireAdminMessenger();
     }
 
     if (firebaseOk){
       onAuthStateChanged(auth, async (user)=>{
         me=user||null;
-        document.getElementById('who').textContent=me?(me.displayName || '로그인됨'):'로그인 안 됨';
+        $btnProfile.style.display = me ? 'inline-block' : 'none';
         document.getElementById('login').style.display=me?'none':'inline-block';
         document.getElementById('logout').style.display=me?'inline-block':'none';
+        $who.textContent=me?(me.displayName || '로그인됨'):'로그인 안 됨';
 
         try { if (unsubAdminDoc) { unsubAdminDoc(); } } catch {}
         isAdmin = false;
@@ -460,16 +672,32 @@
             unsubAdminDoc = onSnapshot(r, s=>{
               isAdmin = s.exists();
               applyAdminUI();
-            }, err=>{
-              console.warn('[admins/{uid}] listen error', err);
-              isAdmin = false; applyAdminUI();
-            });
+              ensureProfileOnLogin();
+              refreshTopName();
+            }, _=>{ isAdmin=false; applyAdminUI(); refreshTopName(); });
           }catch(e){
-            console.warn('[admins/{uid}] build error', e);
-            isAdmin = false; applyAdminUI();
+            isAdmin=false; applyAdminUI(); refreshTopName();
           }
+        } else {
+          refreshTopName();
         }
       });
+    }
+
+    async function refreshTopName(){
+      if (!firebaseOk || !me){
+        $who.textContent = '로그인 안 됨';
+        return;
+      }
+      try{
+        const pf = await getDoc(doc(db,'profiles', me.uid));
+        const d = pf.exists()? (pf.data()||{}) : null;
+        const nick = d?.nick || (me.displayName||'익명');
+        const rank = d?.rankCode || 'Z';
+        $who.innerHTML = `${esc(nameWithRank(nick, rank, isAdmin))}`;
+      }catch{
+        $who.textContent = me.displayName || '로그인됨';
+      }
     }
 
     /* ---------------- 아이콘 캐시 ---------------- */
@@ -633,7 +861,7 @@
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
-    /* ---------------- 신고: 정책/프록시 ---------------- */
+    /* ---------------- 신고: 정책/프록시 (원본 유지) ---------------- */
     let reportedComments = []; // 관리자 패널 표시용
     let unsubRepComments = null;
 
@@ -706,28 +934,21 @@
       }
     }
 
-    // 관리자용 프록시: adminReports 컬렉션 구독 추가
     async function subscribeReportedCommentsAdmin(){
       if (unsubRepComments){unsubRepComments();unsubRepComments=null;}
       if (!firebaseOk || !isAdmin){
         reportedComments = []; renderReportedComments(); return;
       }
-
       const stops = [];
 
-      // 1) 댓글의 reportPendingCount > 0
       stops.push(onSnapshot(query(collectionGroup(db,'comments'), where('reportPendingCount','>',0)),
         (snap)=> ingestCommentGroupSnap(snap),
         (err)=> console.warn('[rep-list count]', err)
       ));
-
-      // 2) 숨김 상태 기준
       stops.push(onSnapshot(query(collectionGroup(db,'comments'), where('hiddenUntil','>', new Date())),
         (snap)=> ingestCommentGroupSnap(snap),
         (err)=> console.warn('[rep-list hidden]', err)
       ));
-
-      // 3) 보류 report 기준
       stops.push(onSnapshot(query(collectionGroup(db,'reports'), where('status','==','pending')),
         async (snap)=>{
           const tasks = [];
@@ -742,8 +963,6 @@
         },
         (err)=> console.warn('[rep-list reports]', err)
       ));
-
-      // 4) 관리자 프록시 컬렉션 직접 구독
       stops.push(onSnapshot(collection(db,'adminReports'), snap=>{
         const now = nowMs();
         const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
@@ -773,7 +992,6 @@
       unsubRepComments = ()=> stops.forEach(s=> s());
     }
 
-    // 그룹 스냅을 reportedComments(Map)로 병합
     function ingestCommentGroupSnap(snap){
       const now = nowMs();
       const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
@@ -967,10 +1185,8 @@
     }
     function applyAllVisibility(){ markerMap.forEach((_, id)=> applyVisibility(id)); }
 
-    // 48시간 경과 자동 복귀(1분마다 재평가)
     setInterval(()=> { applyAllVisibility(); recomputeSeqs(); }, 60*1000);
 
-    /* ---------------- 신고 흐름 변경: 프록시 생성 ---------------- */
     async function _touchFirstAtIfEmpty(refPath){
       const r = doc(db, ...refPath);
       const s = await getDoc(r);
@@ -980,7 +1196,6 @@
       return r;
     }
 
-    // 댓글 신고 제출 (유저)
     async function submitCommentReport(markerId, commentId, reason){
       const cref = doc(db,'markers', markerId, 'comments', commentId);
       const cs = await getDoc(cref);
@@ -1015,7 +1230,6 @@
       else alert('신고가 접수되었습니다. 조건 충족 시 자동으로 가려집니다.');
     }
 
-    // 핀 신고 제출 (유저)
     async function reportMarker(m, reason){
       if (!firebaseOk) return { ok:false, hid:false };
       const mref = doc(db,'markers', m.id);
@@ -1123,6 +1337,20 @@
     const $cList = document.getElementById('cList');
     let unsubComments = null;
 
+    async function getDisplayForUid(uid){
+      if (!firebaseOk || !uid) return {nick:'익명', rankCode:'Z', isAdmin:false};
+      const [pf, ad] = await Promise.all([
+        getDoc(doc(db,'profiles', uid)).catch(()=>null),
+        getDoc(doc(db,'admins', uid)).catch(()=>null)
+      ]);
+      const isAdm = ad && ad.exists();
+      const nick = (pf && pf.exists() && (pf.data()?.nick)) || '익명';
+      const rank = (pf && pf.exists() && (pf.data()?.rankCode)) || 'Z';
+      return { nick, rankCode:rank, isAdmin:isAdm };
+    }
+
+    function fmtDisplay(nick, rankCode, adm){ return nameWithRank(nick, rankCode, adm); }
+
     function openComments(marker){
       if (!firebaseOk) { $cForm.style.display='none'; $cList.innerHTML=''; return; }
       if (unsubComments){unsubComments();unsubComments=null; }
@@ -1136,11 +1364,11 @@
           const c = { id:d.id, ...d.data() };
           const hidden = c.hiddenUntil ? (toMs(c.hiddenUntil) > now) : false;
           if (c.deleted) return;
-          if (!isAdmin && hidden) return;   // 관리자는 숨김 댓글도 본다
+          if (!isAdmin && hidden) return;
           raw.push({ ...c, _hidden:hidden });
         });
 
-        // 신고 배지/카운터
+        // 신고 카운터
         const items = await Promise.all(raw.map(async c=>{
           let cnt = c.reportPendingCount || 0;
           try{
@@ -1149,13 +1377,15 @@
               const s = await getDocs(q); cnt = s.size || 0;
             }
           }catch(_e){}
-          return { ...c, _repCnt: cnt };
+          // 닉/랭크 표기 교체
+          const disp = await getDisplayForUid(c.uid);
+          return { ...c, _repCnt: cnt, _disp: disp };
         }));
 
         $cList.innerHTML = items.map(c => `
           <div class="citem" id="c-${c.id}">
             <div class="meta">
-              ${c.displayName || '익명'} · ${new Date(toMs(c.createdAt||Date.now())).toLocaleString()}
+              ${esc(fmtDisplay(c._disp.nick, c._disp.rankCode, c._disp.isAdmin))} · ${new Date(toMs(c.createdAt||Date.now())).toLocaleString()}
               ${c._repCnt>0 ? `<span class="badge-report">신고 ${c._repCnt}</span>`:''}
               ${c._hidden ? `<span class="badge-hidden">가림중</span>`:''}
             </div>
@@ -1187,12 +1417,15 @@
         if (!me) { alert('로그인 후 작성할 수 있어요.'); return; }
         const body = ($cBody.value||'').trim();
         if (!body) return;
+        const myProfSnap = await getDoc(doc(db,'profiles', me.uid)).catch(()=>null);
+        const nick = (myProfSnap && myProfSnap.exists() && myProfSnap.data().nick) || (me.displayName||'익명');
         await addDoc(collection(db,'markers', marker.id, 'comments'), {
-          body, uid: me.uid, displayName: me.displayName || '익명',
+          body, uid: me.uid, displayName: nick,
           createdAt: serverTimestamp(), deleted:false,
           reportPendingCount: 0, reportsBlocked: false
         });
         $cBody.value='';
+        await awardXP('comment');
       };
     }
 
@@ -1247,22 +1480,25 @@
 
     async function openInfo(m, seqNum){
       currentOpenId=m.id;
-      const $infoTitle=document.getElementById('infoTitle');
-      const $infoId=document.getElementById('infoId');
-      const $infoMeta=document.getElementById('infoMeta');
-      const $infoMediaTop=document.getElementById('infoMediaTop');
-      const $infoBody=document.getElementById('infoBody');
-      const $infoPk=document.getElementById('infoPk');
-      const $infoBtns=document.getElementById('infoBtns');
-
       $infoTitle.textContent=m.title||'(제목 없음)';
       $infoId.textContent = seqNum ? '#'+seqNum : '#-';
       const statusText = m.status || 'pending';
 
-      // 핀 신고 뱃지(누적)
       const pinRepCnt = await fetchMarkerPendingCount(m.id);
+
+      // 작성자 닉/랭크 표시
+      let authorDisp = '익명';
+      try{
+        if (m.authorUid){
+          const disp = await getDisplayForUid(m.authorUid);
+          authorDisp = fmtDisplay(disp.nick, disp.rankCode, disp.isAdmin);
+        } else {
+          authorDisp = m.displayName || '익명';
+        }
+      }catch{ authorDisp = m.displayName || '익명'; }
+
       $infoMeta.innerHTML = `
-        <span>${labelFor(m.category)} · by ${esc(m.displayName||'익명')} · ${statusText}</span>
+        <span>${labelFor(m.category)} · by ${esc(authorDisp)} · ${statusText}</span>
         ${pinRepCnt>0 ? `<span class="badge">신고 ${pinRepCnt}</span>`:''}
       `;
 
@@ -1416,19 +1652,12 @@
     const modal=document.getElementById('modal');
     const t=document.getElementById('mTitle');
     const b=document.getElementById('mBody');
-    const nickSel=document.getElementById('mNickSel');
-    const nickCus=document.getElementById('mNickCustom');
     const imgsInp=document.getElementById('mImgs');
     const videoInp=document.getElementById('mVideo');
 
     document.getElementById('cancelBtn').onclick=()=>{ modal.style.display='none'; pending=null; };
     modal.addEventListener('click', (e)=>{ if(e.target===modal){ modal.style.display='none'; pending=null; } });
     window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.style.display==='flex'){ modal.style.display='none'; pending=null; } });
-
-    // ❗ 문법 오류 수정: 흰 화면 방지
-    nickSel.onchange = () => {
-      nickCus.style.display = (nickSel.value==='custom') ? 'block' : 'none';
-    };
 
     // 포켓몬 편집기
     const pkEditor = document.getElementById('pkEditor');
@@ -1447,7 +1676,7 @@
     catSel.addEventListener('change', ()=>{ pkEditor.style.display = pokemonCats.includes(catSel.value) ? 'block' : 'none'; });
 
     let pending=null;
-    map.on('click', (e)=>{
+    map.on('click', async (e)=>{
       if (mode!=='place') return;
       if(!me){ alert('로그인 후 등록할 수 있어요.'); return; }
       if(!isInside(e.latlng)){ alert('맵 바깥에는 등록할 수 없습니다'); return; }
@@ -1471,9 +1700,9 @@
       const prevTxt = saveBtn.textContent;
       saveBtn.disabled = true;
       try {
-        let displayName='익명';
-        if (nickSel.value==='me') displayName = me.displayName || '익명';
-        else if (nickSel.value==='custom') displayName = (nickCus.value||'').trim() || '익명';
+        // 프로필 닉네임 사용
+        const pfSnap = await getDoc(doc(db,'profiles', me.uid)).catch(()=>null);
+        const displayName = (pfSnap && pfSnap.exists() && pfSnap.data().nick) || (me.displayName || '익명');
 
         const media=[];
         for (let i=0;i<imgFiles.length;i++){
@@ -1493,7 +1722,7 @@
           x: pending.lng, y: pending.lat,
           title: t.value, body: b.value,
           category: catSel.value,
-          media, thumbUrl, // null 가능
+          media, thumbUrl,
           displayName, authorUid: me.uid,
           createdAt: serverTimestamp(),
           status: 'pending',
@@ -1503,6 +1732,8 @@
         });
         modal.style.display='none'; pending=null;
         setBtn('등록 완료!'); setTimeout(()=>{ saveBtn.disabled=false; setBtn(prevTxt); }, 700);
+
+        await awardXP('pin');
       } catch (err) {
         alert('저장 실패: ' + (err?.message||err));
         saveBtn.disabled=false; setBtn(prevTxt);
@@ -1523,6 +1754,298 @@
     // 초기 구독
     subscribeMarkers();
     subscribeReportedCommentsAdmin();
+
+    /* ====== 프로필 UI ====== */
+    const profileModal = document.getElementById('profileModal');
+    const pfNick = document.getElementById('pfNick');
+    const pfRank = document.getElementById('pfRank');
+    const pfRemain = document.getElementById('pfRemain');
+    const pfWho = document.getElementById('pfWho');
+    const pfClose = document.getElementById('pfClose');
+    const pfSave = document.getElementById('pfSave');
+    function openProfile(force=false){
+      if (!me){ alert('로그인이 필요합니다.'); return; }
+      pfWho.textContent = `구글: ${me.displayName||'(이름 없음)'} · ${me.email||''}`;
+      profileModal.style.display='flex';
+      loadProfile(force);
+    }
+    async function loadProfile(){
+      if (!firebaseOk || !me) return;
+      const pfRef = doc(db,'profiles', me.uid);
+      const s = await getDoc(pfRef);
+      const d = s.exists()? (s.data()||{}) : { nick: me.displayName||'익명', xp:0, rankCode:'Z' };
+      pfNick.value = d.nick || (me.displayName||'익명');
+      pfRank.textContent = d.rankCode || 'Z';
+      const calc = totalToRank(d.xp||0);
+      pfRemain.textContent = (calc.next>0) ? `${calc.next} XP` : (calc.cap ? '최대' : '0 XP');
+    }
+    $btnProfile.onclick = ()=> openProfile();
+    pfClose.onclick = ()=> profileModal.style.display='none';
+    profileModal.addEventListener('click', (e)=>{ if(e.target===profileModal) profileModal.style.display='none'; });
+    pfSave.onclick = async ()=>{
+      if (!firebaseOk || !me) return;
+      const nick = (pfNick.value||'').trim() || (me.displayName||'익명');
+      const pfRef = doc(db,'profiles', me.uid);
+      await setDoc(pfRef, { uid: me.uid, nick }, { merge:true });
+      profileModal.style.display='none';
+      await refreshTopName();
+      alert('프로필이 저장되었습니다.');
+    };
+
+    /* ====== 공지 시스템 ======
+       컬렉션: notices (doc: {title, body, files:[{name,url}], createdAt, authorUid})
+       보기 차단: noticeSuppress/{uid} (doc: {until: Timestamp})
+       최근 공지 자동 팝업 (최초 로그인 화면보다 아래) + 비로그인 유저는 매 방문마다 노출
+    */
+    const noticeModal = document.getElementById('noticeModal');
+    const noticeListModal = document.getElementById('noticeListModal');
+    const ntListWrap = document.getElementById('ntListWrap');
+    const ntNew = document.getElementById('ntNew');
+    const btnNoticeList = document.getElementById('btnNoticeList');
+    const noticeClose = document.getElementById('noticeClose');
+    const ntListClose = document.getElementById('ntListClose');
+    const noticeView = document.getElementById('noticeView');
+    const noticeEdit = document.getElementById('noticeEdit');
+    const noticeTitle = document.getElementById('noticeTitle');
+    const noticeBody = document.getElementById('noticeBody');
+    const noticeDate = document.getElementById('noticeDate');
+    const noticeFiles = document.getElementById('noticeFiles');
+    const noticeAdminBtns = document.getElementById('noticeAdminBtns');
+    const noticeHide24 = document.getElementById('noticeHide24');
+    const noticeDismiss = document.getElementById('noticeDismiss');
+    const ntTitle = document.getElementById('ntTitle');
+    const ntBody = document.getElementById('ntBody');
+    const ntFiles = document.getElementById('ntFiles');
+    const ntCancel = document.getElementById('ntCancel');
+    const ntSave = document.getElementById('ntSave');
+
+    let currentNoticeId = null;
+
+    btnNoticeList.onclick = ()=> openNoticeList();
+
+    function openNoticeList(){
+      if (!firebaseOk){ alert('네트워크 필요'); return; }
+      noticeListModal.style.display='flex';
+      renderNoticeList();
+      ntNew.style.display = isAdmin ? 'inline-block' : 'none';
+    }
+    ntListClose.onclick = ()=> noticeListModal.style.display='none';
+    noticeListModal.addEventListener('click', (e)=>{ if(e.target===noticeListModal) noticeListModal.style.display='none'; });
+
+    async function renderNoticeList(){
+      const qs = query(collection(db,'notices'), orderBy('createdAt','desc'));
+      const snap = await getDocs(qs);
+      ntListWrap.innerHTML = [...snap.docs].map(d=>{
+        const v = d.data()||{};
+        const dt = new Date(toMs(v.createdAt||Date.now())).toLocaleString();
+        return `<div class="ritem" data-id="${d.id}">
+          <div style="font-weight:600">${esc(v.title||'(제목 없음)')}</div>
+          <div class="meta">${dt}</div>
+          <div style="margin-top:6px"><button class="rbtn" data-open>열기</button></div>
+        </div>`;
+      }).join('') || `<div style="opacity:.7">등록된 공지가 없습니다.</div>`;
+      ntListWrap.onclick = (e)=>{
+        const card = e.target.closest('.ritem'); if(!card) return;
+        if (e.target.matches('[data-open]')) openNotice(card.getAttribute('data-id'));
+      };
+    }
+
+    async function openNotice(id){
+      const s = await getDoc(doc(db,'notices', id));
+      if (!s.exists()){ alert('삭제된 공지입니다'); return; }
+      const v = s.data()||{};
+      currentNoticeId = id;
+      noticeEdit.style.display='none';
+      noticeView.style.display='block';
+      noticeModal.style.display='flex';
+      noticeTitle.textContent = v.title||'(제목 없음)';
+      noticeBody.textContent = v.body||'';
+      noticeDate.textContent = new Date(toMs(v.createdAt||Date.now())).toLocaleString();
+      if (Array.isArray(v.files)&&v.files.length){
+        noticeFiles.innerHTML = v.files.map(f=>`<div><a href="${f.url}" target="_blank" rel="noopener">${esc(f.name||'파일')}</a></div>`).join('');
+      } else noticeFiles.innerHTML='';
+
+      if (isAdmin){
+        noticeAdminBtns.innerHTML = `
+          <button id="ntEdit" class="tbtn">수정</button>
+          <button id="ntDel" class="tbtn">삭제</button>
+        `;
+        document.getElementById('ntEdit').onclick = ()=> editNotice(id, v);
+        document.getElementById('ntDel').onclick = async ()=>{
+          if (!confirm('이 공지를 삭제할까요?')) return;
+          await deleteDoc(doc(db,'notices', id));
+          noticeModal.style.display='none';
+          renderNoticeList();
+        };
+      } else {
+        noticeAdminBtns.innerHTML = '';
+      }
+    }
+    noticeClose.onclick = ()=> noticeModal.style.display='none';
+    noticeModal.addEventListener('click', (e)=>{ if(e.target===noticeModal) noticeModal.style.display='none'; });
+
+    ntNew.onclick = ()=> {
+      noticeEdit.style.display='block';
+      noticeView.style.display='none';
+      noticeModal.style.display='flex';
+      ntTitle.value=''; ntBody.value=''; ntFiles.value='';
+      currentNoticeId=null;
+    };
+    ntCancel.onclick = ()=> { noticeModal.style.display='none'; };
+
+    ntSave.onclick = async ()=>{
+      if (!firebaseOk || !isAdmin){ alert('권한 없음'); return; }
+      if (!confirm('공지 작성시 유저 모두에게 보이게 됩니다. 이 내용이 맞습니까?')) return;
+      const files = Array.from(ntFiles.files||[]);
+      const uploaded = [];
+      for (let i=0;i<files.length;i++){
+        const url = await uploadSmart(files[i], 'noticeFiles', (t)=>{}, `파일 ${i+1}/${files.length}`);
+        uploaded.push({ name: files[i].name, url });
+      }
+      const payload = {
+        title: ntTitle.value||'(제목 없음)',
+        body: ntBody.value||'',
+        files: uploaded,
+        authorUid: me?.uid||null,
+        createdAt: serverTimestamp()
+      };
+      const docRef = await addDoc(collection(db,'notices'), payload);
+      noticeModal.style.display='none';
+      // 관리진 메신저에 특수 공지 메세지 삽입
+      await addDoc(collection(db,'adminChat'), {
+        type:'notice',
+        noticeId: docRef.id,
+        title: payload.title,
+        body: payload.body,
+        createdAt: serverTimestamp(),
+        uid: me?.uid||null
+      });
+      openNoticeList();
+      renderNoticeList();
+    };
+
+    noticeHide24.onclick = async ()=>{
+      if (!firebaseOk){ alert('로그인 시에만 유지됩니다. 비로그인 유저는 매 방문마다 공지가 표시됩니다.'); return; }
+      if (!me){ alert('로그인 후 이용 가능합니다.'); return; }
+      const until = new Date(Date.now()+24*3600*1000);
+      await setDoc(doc(db,'noticeSuppress', me.uid), { until }, { merge:true });
+      alert('24시간 동안 자동 팝업을 표시하지 않습니다.');
+      noticeModal.style.display='none';
+    };
+    noticeDismiss.onclick = ()=> noticeModal.style.display='none';
+
+    // 최근 공지 자동 팝업
+    async function autoPopupLatestNotice(){
+      if (!firebaseOk) return;
+      // 가장 최근 1개
+      const qs = query(collection(db,'notices'), orderBy('createdAt','desc'), limit(1));
+      const s = await getDocs(qs);
+      if (s.empty) return;
+      const d = s.docs[0]; const v = d.data()||{};
+      // 비로그인: 항상 표시
+      if (!me){
+        openNotice(d.id);
+        return;
+      }
+      // 로그인: 억제 확인
+      try{
+        const sup = await getDoc(doc(db,'noticeSuppress', me.uid));
+        const until = toMs(sup?.data()?.until);
+        if (until && until > Date.now()) return; // 억제중
+      }catch{}
+      openNotice(d.id);
+    }
+
+    // 최초 로그인 이후 한 번 자동 팝업
+    setTimeout(autoPopupLatestNotice, 1200);
+
+    /* ====== 관리진 메신저 ======
+       컬렉션: adminChat (doc: {uid, body, type('text'|'notice'), noticeId?, createdAt})
+       lastSeen: adminSeen/{uid} { last: Timestamp }
+    */
+    const messengerModal = document.getElementById('messengerModal');
+    const chatBox = document.getElementById('chatBox');
+    const msgInput = document.getElementById('msgInput');
+    const msgSend = document.getElementById('msgSend');
+    const msgClose = document.getElementById('msgClose');
+    let unsubChat=null;
+
+    function openMessenger(){
+      if (!isAdmin){ alert('관리진 전용'); return; }
+      messengerModal.style.display='flex';
+      markSeenNow();
+      if (!unsubChat){
+        const qy = query(collection(db,'adminChat'), orderBy('createdAt','asc'));
+        unsubChat = onSnapshot(qy, async snap=>{
+          chatBox.innerHTML = '';
+          for (const d of snap.docs){
+            const v = d.data()||{};
+            if (v.type==='notice'){
+              chatBox.insertAdjacentHTML('beforeend', `
+                <div class="sys-notice">
+                  <h4>📢 공지: ${esc(v.title||'(제목 없음)')}</h4>
+                  <p>${esc(v.body||'')}</p>
+                </div>
+              `);
+            } else {
+              const mine = v.uid===me?.uid;
+              const disp = await getDisplayForUid(v.uid);
+              chatBox.insertAdjacentHTML('beforeend', `
+                <div class="chat-row ${mine?'me':'other'}">
+                  <div>
+                    <div class="bubble">${esc(v.body||'')}</div>
+                    <div class="chat-meta">${esc(fmtDisplay(disp.nick, disp.rankCode, disp.isAdmin))} · ${new Date(toMs(v.createdAt||Date.now())).toLocaleString()}</div>
+                  </div>
+                </div>
+              `);
+            }
+          }
+          chatBox.scrollTop = chatBox.scrollHeight;
+        });
+      }
+    }
+    function closeMessenger(){ messengerModal.style.display='none'; }
+    msgClose.onclick = closeMessenger;
+    messengerModal.addEventListener('click', (e)=>{ if(e.target===messengerModal) closeMessenger(); });
+
+    msgSend.onclick = async ()=>{
+      const body = (msgInput.value||'').trim();
+      if (!body) return;
+      await addDoc(collection(db,'adminChat'), { uid: me?.uid||null, body, type:'text', createdAt: serverTimestamp() });
+      msgInput.value='';
+      markSeenNow();
+    };
+
+    $btnMsg.onclick = ()=> openMessenger();
+
+    async function markSeenNow(){
+      if (!firebaseOk || !me || !isAdmin) return;
+      await setDoc(doc(db,'adminSeen', me.uid), { last: serverTimestamp() }, { merge:true });
+      $msgBang.classList.remove('show');
+    }
+    function wireAdminMessenger(){
+      if (!firebaseOk || !isAdmin || !me) { $msgBang.classList.remove('show'); return; }
+      // 새 메세지 감지 → ! 표시
+      const unsubs = [];
+      Promise.all([
+        getDoc(doc(db,'adminSeen', me.uid)).catch(()=>null)
+      ]).then(([seen])=>{
+        let last = toMs(seen?.data()?.last) || 0;
+        unsubs.push(onSnapshot(query(collection(db,'adminChat'), orderBy('createdAt','asc')), snap=>{
+          let hasNew=false;
+          snap.forEach(d=>{
+            const v=d.data()||{};
+            const ct = toMs(v.createdAt||0) || 0;
+            if (ct>last && v.uid!==me?.uid){ hasNew=true; }
+          });
+          $msgBang.classList.toggle('show', hasNew);
+        }));
+      });
+    }
+
+    /* ===== 페이지 진입 시: 최초 로그인시 닉네임 안내 ===== */
+    // onAuthStateChanged → ensureProfileOnLogin()에서 팝업
+
   </script>
 </body>
-  </html>
+</html>
