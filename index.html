@@ -43,7 +43,15 @@
       border-radius:999px; cursor:pointer; font-size:13px; position:relative;
     }
     .flt.on{background:#3d6cff; border-color:#3d6cff; color:#fff}
-    .flt .progress{position:absolute; bottom:2px; left:50%; transform:translateX(-50%); font-size:10px; opacity:.8}
+    /* 진행도: 더 작게, 기본은 숨김 */
+    .flt .progress{
+      position:absolute;
+      bottom:2px; left:50%; transform:translateX(-50%);
+      font-size:9px; opacity:.75; display:none;
+    }
+    /* 해당 카테고리가 ON일 때만 표시 */
+    .flt.on .progress{ display:block }
+
     .hr{height:1px; background:#2a3040; margin:12px 0}
     .inp{width:100%; box-sizing:border-box; background:#1117; color:#eef; border:1px solid #303645; border-radius:10px; padding:8px}
     .row{display:flex; gap:8px; align-items:center}
@@ -1228,11 +1236,14 @@
     function updateCategoryProgress(catKey){
       const btn = document.querySelector(`.flt[data-cat="${CSS.escape(catKey)}"]`);
       if (!btn) return;
-      
-      const total = [...markerMap.values()].filter(r=>r.data.category===catKey && r.data.status==='approved').length;
-      const confirmed = catConfirmed.get(catKey) || 0;
+
+      // 승인된 핀만 총계
+      const total = [...markerMap.values()]
+        .filter(r=>r.data.category===catKey && r.data.status==='approved').length;
+
+      const confirmed = confirmedCountForCat(catKey);
       const percent = total > 0 ? Math.round((confirmed/total)*100) : 0;
-      
+
       let progressEl = btn.querySelector('.progress');
       if (!progressEl){
         progressEl = document.createElement('div');
@@ -1240,6 +1251,9 @@
         btn.appendChild(progressEl);
       }
       progressEl.textContent = `${percent}%`;
+
+      // 카테고리가 "켜져 있을 때만" 보이게 (CSS와 함께 동작)
+      progressEl.style.display = btn.classList.contains('on') ? 'block' : 'none';
     }
     
     function setAllCats(v){ CATEGORIES.forEach(c=> setCategoryVisible(c.key, v)); }
@@ -2086,11 +2100,23 @@
     // ✅ 확인 버튼
     $btnConfirm.onclick = ()=>{
       if (!currentOpenId) return;
-      const rec = markerMap.get(currentOpenId);
-      if (!rec) return;
-      
+      const rec = markerMap.get(currentOpenId); if (!rec) return;
+
       rec.confirmed = !rec.confirmed;
       LS.save(`pin_confirmed_${currentOpenId}`, rec.confirmed);
+
+      // 진행도 갱신
+      updateCategoryProgress(rec.data.category);
+
+      // 업적/통계 유지
+      if (rec.confirmed && me){
+        updateDoc(doc(db,'profiles', me.uid), {
+          pinsConfirmed: increment(1)
+        }).then(()=> checkAchievements(me.uid));
+      }
+
+      applyVisibility(currentOpenId);
+      $btnConfirm.textContent = rec.confirmed ? '✓ 확인됨' : '✓ 확인';
       
       // 카테고리 진행도 업데이트
       const cat = rec.data.category;
@@ -2561,10 +2587,20 @@
 
     let pending=null;
     map.on('click', (e)=>{
+      if (mode !== 'place') return;
+
+      // 사용자가 실제로 누른 클릭만 통과 (자동/스크립트/부수 효과 차단)
+      if (!e?.originalEvent || !e.originalEvent.isTrusted) return;
+
+      if (!me){ alert('로그인 후 등록할 수 있어요.'); return; }
+      if (!isInside(e.latlng)){ alert('맵 바깥에는 등록할 수 없습니다'); return; }
+
+      pending = e.latlng;
+      // ... (나머지 기존 코드 동일)
+      modal.style.display='flex';
       if (mode!=='place') return;
       if(!me){ alert('로그인 후 등록할 수 있어요.'); return; }
       if(!isInside(e.latlng)){ alert('맵 바깥에는 등록할 수 없습니다'); return; }
-      pending=e.latlng;
       t.value=''; b.value=''; imgsInp.value=''; videoInp.value='';
       tmNumber.value=''; tmName.value=''; megaPokemon.value=''; missionNumber.value=''; itemName.value='';
       pkList=[]; redrawPkChips();
@@ -2576,7 +2612,6 @@
       megaEditor.style.display = cat === MEGA_STONE_CAT ? 'block' : 'none';
       missionEditor.style.display = MISSION_CATS.includes(cat) ? 'block' : 'none';
       itemEditor.style.display = ITEM_CATS.includes(cat) ? 'block' : 'none';      
-      modal.style.display='flex';
     });
 
     document.getElementById('saveBtn').onclick = async () => {
@@ -2719,6 +2754,10 @@
           ? list.map(a=>`<span class="achievement-badge ${a.tier}">${a.name}</span>`).join('')
           : '<div style="opacity:.7">전시된 업적이 없습니다</div>';
           const modal = document.getElementById('otherProfileModal');
+          // 방문 시 무조건 닫혀 있게 강제
+            modal.style.display = 'none';
+            pending = null;
+
         modal.style.display = 'flex';
         document.getElementById('opClose').onclick = ()=>{ modal.style.display='none'; };
         modal.addEventListener('click', (e)=>{ if(e.target===modal) modal.style.display='none'; }, { once:true });
@@ -3593,7 +3632,17 @@
     // 마커 로드 후 확인된 핀 집계
     setTimeout(loadConfirmedPins, 2000);
 
+    // 페이지 로드 직후 한 틱 뒤에 강제 닫기 (실수로 열렸으면 잡아줌)
+      setTimeout(()=>{
+        if (mode !== 'place' && modal.style.display !== 'none'){
+         modal.style.display = 'none';
+          pending = null;
+        }
+      }, 0);
+
+
     console.log('✅ ZA 한글 공략 맵 초기화 완료');
+
   
   </script>
 </body>
