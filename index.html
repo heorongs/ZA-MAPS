@@ -109,6 +109,49 @@
   </div>
   <script> setTimeout(()=>{ if(!window.L){ document.getElementById('blockWarn').style.display='flex'; } }, 1500); </script>
 
+  <!-- ✅ 인앱 브라우저 감지 & 외부 브라우저로 열기 배너 -->
+  <script>
+  (function(){
+    const INAPP_PATTERNS = [
+      /KAKAOTALK/i, /Line\//i, /Instagram/i, /FBAN|FBAV/i, /Twitter/i, /Snapchat/i, /MicroMessenger/i
+    ];
+    function inAppBrowser(){ const ua=navigator.userAgent||''; return INAPP_PATTERNS.some(r=>r.test(ua)); }
+    function openExternally(url){
+      try{
+        const w = window.open(url, '_blank'); if (w) return true;
+        if (/Android/i.test(navigator.userAgent)){
+          const intentUrl = 'intent://' + url.replace(/^https?:\/\//,'') + '#Intent;scheme=https;package=com.android.chrome;end';
+          window.location.href=intentUrl; return true;
+        }
+        window.location.href=url; return true;
+      }catch(e){ console.warn('external open failed', e); return false; }
+    }
+    function showOpenBanner(externalUrl){
+      if (document.getElementById('inapp-open-banner')) return;
+      const wrap = document.createElement('div');
+      wrap.id='inapp-open-banner';
+      wrap.innerHTML = `
+        <div style="position:fixed;top:0;left:0;right:0;z-index:2999;background:linear-gradient(90deg,#111e,#162030);
+          color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;font-size:14px;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,.4);">
+          <div>앱 내 브라우저에서 접속 중입니다 — 외부 브라우저로 열어보시겠어요?</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="btn-open-external" style="background:#3d6cff;color:#fff;border:0;padding:6px 10px;border-radius:8px;cursor:pointer">외부 브라우저로 열기</button>
+            <button id="btn-open-close" style="background:transparent;color:#cfd8dc;border:1px solid #2b3345;padding:6px 10px;border-radius:8px;cursor:pointer">닫기</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      document.getElementById('btn-open-external').onclick = ()=>{
+        const ok = openExternally(externalUrl || location.href);
+        if (!ok) alert('외부 브라우저로 열지 못했습니다. 브라우저 메뉴에서 "외부 브라우저로 열기"를 선택해 주세요.');
+        wrap.remove();
+      };
+      document.getElementById('btn-open-close').onclick = ()=> wrap.remove();
+    }
+    function init(){ if (!inAppBrowser()) return; showOpenBanner(location.href); }
+    if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', init, {once:true}); else init();
+  })();
+  </script>
+
   <div class="bar">
     <span id="who">로그인 안 됨</span>
     <button id="login">Google 로그인</button>
@@ -605,7 +648,7 @@
     }
     qTrendEl.onclick = (e)=>{
       const b=e.target.closest('[data-sug]'); if(!b) return;
-      const q=b.getAttribute('data-sug'); qInput.value=q; qSearch.click();
+      const q=b.getAttribute('data-sug'); qInput.value = q; qSearch.click();
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
@@ -1393,7 +1436,7 @@
     modal.addEventListener('click', (e)=>{ if(e.target===modal){ modal.style.display='none'; pending=null; } });
     window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.style.display==='flex'){ modal.style.display='none'; pending=null; }});
 
-    // ❗ 문법 오류를 고친 라인 (흰 화면 방지)
+    // ❗ 문법 오류 수정: 흰 화면 방지
     nickSel.onchange = () => {
       nickCus.style.display = (nickSel.value==='custom') ? 'block' : 'none';
     };
