@@ -12,6 +12,7 @@
       position:fixed; left:10px; top:10px; z-index:1400;
       background:#111a; color:#fff; padding:8px 10px; border-radius:10px; font-size:14px;
       display:flex; gap:8px; align-items:center;
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     }
     .bar button{margin:0}
     #adminBadge{display:none;background:#ffd54f;color:#111;padding:2px 6px;border-radius:8px}
@@ -162,36 +163,36 @@
   })();
   </script>
 
-  <div class="bar">
+  <div class="bar" role="toolbar" aria-label="상단 도구막대">
     <span id="who">로그인 안 됨</span>
-    <button id="login">Google 로그인</button>
-    <button id="logout" style="display:none">로그아웃</button>
-    <button id="btnProfile" class="tbtn" style="display:none">프로필</button>
-    <span id="adminBadge">관리자</span>
+    <button id="login" title="Google 로그인">Google 로그인</button>
+    <button id="logout" style="display:none" title="로그아웃">로그아웃</button>
+    <button id="btnProfile" class="tbtn" style="display:none" title="프로필 설정">프로필</button>
+    <span id="adminBadge" aria-label="관리자">관리자</span>
     <span style="width:1px;height:20px;background:#2f3545;margin:0 6px"></span>
-    <button id="btnSearch" class="tbtn on">검색 모드</button>
-    <button id="btnPlace"  class="tbtn">핀 배치 모드</button>
-    <button id="btnAdminReport" class="tbtn" style="display:none">신고 관리 모드</button>
+    <button id="btnSearch" class="tbtn on" title="검색 모드(S)">검색 모드</button>
+    <button id="btnPlace"  class="tbtn" title="핀 배치 모드(M)">핀 배치 모드</button>
+    <button id="btnAdminReport" class="tbtn" style="display:none" title="신고 관리 모드">신고 관리 모드</button>
   </div>
 
   <!-- 우측 상단: 공지 / 메신저 -->
   <div class="top-right">
-    <button id="btnNoticeList" class="pill-btn">공지</button>
-    <button id="btnMsg" class="pill-btn" style="display:none">메세지 <span class="bang" id="msgBang">!</span></button>
+    <button id="btnNoticeList" class="pill-btn" title="공지 목록">공지</button>
+    <button id="btnMsg" class="pill-btn" style="display:none" title="관리진 메신저">메세지 <span class="bang" id="msgBang">!</span></button>
   </div>
 
   <!-- 좌측 사이드 -->
-  <aside id="side">
+  <aside id="side" aria-label="검색 사이드바">
     <div id="sideCats">
       <h3>카테고리 필터</h3>
       <div class="flt-wrap" id="fltList"></div>
 
       <h3>특수 레이어</h3>
       <div class="flt-wrap">
-        <button id="fltWild" class="flt on">와일드 존</button>
-        <button id="fltAll" class="flt">전체 선택</button>
-        <button id="fltNone" class="flt">전체 해제</button>
-        <button id="fltPending" class="flt" style="display:none">승인 대기 핀</button>
+        <button id="fltWild" class="flt on" title="와일드 존 레이어 토글">와일드 존</button>
+        <button id="fltAll" class="flt" title="전체 선택">전체 선택</button>
+        <button id="fltNone" class="flt" title="전체 해제">전체 해제</button>
+        <button id="fltPending" class="flt" style="display:none" title="관리자: 승인 대기 핀만 보기">승인 대기 핀</button>
       </div>
     </div>
 
@@ -217,22 +218,23 @@
     <div class="hr"></div>
     <h3>통합 검색</h3>
     <div class="row" style="align-items:stretch">
-      <input id="qInput" class="inp" placeholder="제목/내용에서 검색" />
-      <button id="qSearch" class="flt">검색</button>
-      <button id="qClear" class="flt">초기화</button>
+      <input id="qInput" class="inp" placeholder="제목/내용에서 검색" aria-label="검색어 입력 (/)로 포커스" />
+      <button id="qSearch" class="flt" title="검색">검색</button>
+      <button id="qClear" class="flt" title="초기화">초기화</button>
     </div>
     <div style="margin-top:8px; font-size:12px; opacity:.85">최근 7일 인기 검색어</div>
     <div id="qTrending" class="flt-wrap" style="margin-top:6px"></div>
   </aside>
 
-  <div id="map"></div>
+  <div id="map" role="application" aria-label="게임 월드 지도"></div>
 
   <!-- 우하단 상세 패널 -->
-  <aside id="info">
+  <aside id="info" aria-live="polite">
     <header>
       <h3 id="infoTitle">(제목)</h3>
       <span id="infoId" class="idtag">#-</span>
-      <button id="infoClose">닫기</button>
+      <button id="copyLinkBtn" title="이 핀 링크 복사">링크복사</button>
+      <button id="infoClose" title="닫기(Esc)">닫기</button>
     </header>
     <div class="media" id="infoMediaTop"></div>
     <div class="pad">
@@ -242,8 +244,8 @@
 
       <div id="infoCarousel" class="carousel" style="display:none">
         <div class="inner" id="carInner"></div>
-        <button class="nav prev" id="carPrev">‹</button>
-        <button class="nav next" id="carNext">›</button>
+        <button class="nav prev" id="carPrev" aria-label="이전">‹</button>
+        <button class="nav next" id="carNext" aria-label="다음">›</button>
         <div class="dots" id="carDots"></div>
       </div>
 
@@ -403,6 +405,12 @@
     const normName = s => (s||'').trim().toLowerCase();
     const fieldKey = s => normName(s).replace(/[.#$/\[\]\/]/g,'_');
 
+    /* === 로컬 상태 저장/복원 === */
+    const LS = {
+      save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} },
+      load(k,def){ try{ const v = JSON.parse(localStorage.getItem(k)||'null'); return v==null?def:v; }catch{ return def; } }
+    };
+
     /* ---------------- Leaflet ---------------- */
     const IMG_URL = "za_world_map_clean_fixed.png";
     const IMG_W = 2048, IMG_H = 2048;
@@ -416,9 +424,9 @@
     map.getPane('wildPane').style.zIndex = 450;
     map.getPane('wildPane').style.pointerEvents = 'none';
     const wildLayer = L.layerGroup().addTo(map);
-    let wildVisible = true;
+    let wildVisible = LS.load('wildVisible', true);
 
-    let showPendingOnly = false;
+    let showPendingOnly = LS.load('showPendingOnly', false);
     let adminReportMode = false;
 
     /* ---------------- Firebase ---------------- */
@@ -508,6 +516,7 @@
       {key:'우두머리 포켓몬', label:'우두머리 포켓몬', defaultIcon:'alpha_pokemon.png'},
       {key:'메가 포켓몬',     label:'메가 포켓몬',     defaultIcon:'mega_pokemon.png'},
     ];
+    const POKEMON_CATS = ['와일드 존','우두머리 포켓몬','메가 포켓몬']; // ✅ 중복 제거된 단일 상수
     const catSel = document.getElementById('mCat');
     catSel.innerHTML = CATEGORIES.map(c=>`<option value="${c.key}">${c.label}</option>`).join('');
 
@@ -541,17 +550,14 @@
     const PIN_XP = 100, CMT_XP = 10;
     const FIRST_PIN_AUTO_UP = true; // Z → Y 한 번에
     function xpForRankIndex(i){ // i=0(Z)~25(A) 까지의 누적 필요치
-      // 누적 XP 테이블(지수성장). Z에서 Y는 0 → 100, 이후 *2씩 증가형 누적.
       let req=0, step=100;
       for(let k=0;k<i;k++){ req += step; step*=2; }
       return req;
     }
     function totalToRank(totalXP){
-      // A 초과 처리(+)
       const aIdx = RANKS.length-1; // 25
       const aNeed = xpForRankIndex(aIdx);
       if (totalXP < aNeed){
-        // 찾기
         let idx=0;
         while(idx<RANKS.length && xpForRankIndex(idx)<=totalXP) idx++;
         idx = Math.max(0, idx-1);
@@ -559,9 +565,7 @@
         const nextNeed = xpForRankIndex(Math.min(idx+1, aIdx));
         return { idx, rank:RANKS[idx], plus:0, cur: totalXP-curNeed, next: Math.max(0, nextNeed-totalXP), cap:false, q:false };
       }
-      // A 이상
       const over = totalXP - aNeed;
-      // + 하나당 대략 50,000 XP 필요(지수 누적 보정). 5개까지.
       const plusUnit = 50000;
       let plus = Math.floor(over / plusUnit);
       if (plus<=5){
@@ -569,11 +573,10 @@
         const cap = plus>=5;
         return { idx:aIdx, rank:'A' + '+'.repeat(plus), plus, cur: over%plusUnit, next, cap, q:false };
       }
-      // 5 초과 → ?
       return { idx:aIdx, rank:'?', plus:999, cur:0, next:0, cap:true, q:true };
     }
 
-    async function awardXP(kind){ // 'pin' | 'comment'
+    async function awardXP(kind){
       if (!firebaseOk || !me) return;
       const pfRef = doc(db,'profiles', me.uid);
       const snap = await getDoc(pfRef);
@@ -582,10 +585,8 @@
       xp += (kind==='pin'? PIN_XP : CMT_XP);
       let firstPinBoon=false;
       if (kind==='pin' && FIRST_PIN_AUTO_UP && (data.rankCode||'Z')==='Z' && !(data.pinnedOnce)){
-        // 첫 핀 보너스: 바로 Y로
         firstPinBoon = true;
       }
-      // 랭크 재계산
       const calc = totalToRank(xp);
       let rankCode = calc.rank;
       if (firstPinBoon) { rankCode = 'Y'; }
@@ -601,7 +602,6 @@
     }
 
     function nameWithRank(nick, rankCode, isAdminFlag){
-      const tag = isAdminFlag ? '¿' : (rankCode||'Z').slice(-1); // A++++ -> 마지막 글자 A 표기, 요구사항은 "닉네임 • V" 형태
       return `${nick||'익명'} • ${isAdminFlag ? '¿' : (rankCode||'Z')}`;
     }
 
@@ -610,8 +610,7 @@
       const pfRef = doc(db,'profiles', me.uid);
       const snap = await getDoc(pfRef);
       if (!snap.exists()){
-        // 최초 로그인 → 닉네임 선택 팝업
-        openProfile(true); // 강제 열기
+        openProfile(true);
         alert('최초 로그인: 어떤 닉네임으로 활동할지 설정해주세요.\n설정하지 않으면 Google 닉네임으로 활동합니다.');
         await setDoc(pfRef, {
           uid: me.uid,
@@ -621,7 +620,6 @@
           createdAt: serverTimestamp()
         }, { merge:true });
       } else {
-        // 로그인 표시 이름 교체
         const data = snap.data()||{};
         $who.innerHTML = `${esc(nameWithRank(data.nick, data.rankCode, isAdmin))}`;
       }
@@ -712,16 +710,20 @@
 
     /* ---------------- 카테고리 그룹 & 토글 ---------------- */
     const catGroups = new Map();
-    const catVisible = new Map();
+    const catVisible = new Map(CATEGORIES.map(c => [c.key, true]));
+    const savedCatVis = LS.load('catVisible', null);
+    if (savedCatVis && typeof savedCatVis==='object'){
+      for (const [k,v] of Object.entries(savedCatVis)){ catVisible.set(k, !!v); }
+    }
     function ensureCatGroup(key){
       if (!catGroups.has(key)) {
         catGroups.set(key, L.layerGroup().addTo(map));
-        catVisible.set(key, true);
       }
       return catGroups.get(key);
     }
     function setCategoryVisible(key, visible){
       catVisible.set(key, visible);
+      LS.save('catVisible', Object.fromEntries(catVisible));
       const g = ensureCatGroup(key);
       if (visible) { if (!map.hasLayer(g)) g.addTo(map); }
       else { if (map.hasLayer(g)) map.removeLayer(g); }
@@ -733,10 +735,11 @@
     function setAllCats(v){ CATEGORIES.forEach(c=> setCategoryVisible(c.key, v)); }
     function setOnlyPokemonCats(){
       setAllCats(false);
-      ['와일드 존','우두머리 포켓몬','메가 포켓몬'].forEach(k=> setCategoryVisible(k, true));
+      POKEMON_CATS.forEach(k=> setCategoryVisible(k, true));
     }
     function setWildVisible(v){
       wildVisible = v;
+      LS.save('wildVisible', v);
       if (v){ if (!map.hasLayer(wildLayer)) wildLayer.addTo(map); }
       else { if (map.hasLayer(wildLayer)) map.removeLayer(wildLayer); }
       document.getElementById('fltWild').classList.toggle('on', v);
@@ -767,7 +770,7 @@
     };
 
     function buildFilters(){
-      fltList.innerHTML = CATEGORIES.map(c=>`<button class="flt on" data-cat="${c.key}">${c.label}</button>`).join('');
+      fltList.innerHTML = CATEGORIES.map(c=>`<button class="flt ${catVisible.get(c.key)!==false?'on':''}" data-cat="${c.key}">${c.label}</button>`).join('');
       fltList.onclick = (e)=>{
         const b = e.target.closest('.flt[data-cat]');
         if (!b) return;
@@ -782,6 +785,7 @@
       $btnPendingOnly.onclick = ()=>{
         if (!isAdmin) return;
         showPendingOnly = !showPendingOnly;
+        LS.save('showPendingOnly', showPendingOnly);
         $btnPendingOnly.classList.toggle('on', showPendingOnly);
         applyAllVisibility(); recomputeSeqs();
       };
@@ -809,9 +813,11 @@
     const qClear   = document.getElementById('qClear');
     const qTrendEl = document.getElementById('qTrending');
 
-    let textFilter = '';
+    let textFilter = LS.load('textFilter','');
+    if (textFilter){ qInput.value = textFilter; }
     function applyTextFilter(q){
       textFilter = norm(q||'');
+      LS.save('textFilter', textFilter);
       applyAllVisibility();
       recomputeSeqs();
     }
@@ -862,7 +868,7 @@
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
     /* ---------------- 신고: 정책/프록시 (원본 유지) ---------------- */
-    let reportedComments = []; // 관리자 패널 표시용
+    let reportedComments = [];
     let unsubRepComments = null;
 
     const msToHuman = (ms)=>{
@@ -953,7 +959,7 @@
         async (snap)=>{
           const tasks = [];
           snap.forEach(d=>{
-            const parentCommentRef = d.ref.parent.parent; // .../comments/{cid}
+            const parentCommentRef = d.ref.parent.parent;
             if (!parentCommentRef) return;
             tasks.push(getDoc(parentCommentRef));
           });
@@ -996,7 +1002,7 @@
       const now = nowMs();
       const idx = new Map(reportedComments.map(x=> [`${x.markerId}|${x.commentId}`, x]));
       snap.forEach(d=>{
-        const p = d.ref.path.split('/'); // markers/{mid}/comments/{cid}
+        const p = d.ref.path.split('/');
         if (!(p[0]==='markers' && p[2]==='comments')) return;
         const markerId = p[1], commentId = p[3];
         const c = d.data()||{};
@@ -1116,7 +1122,7 @@
     }
 
     /* ---------------- 마커 구독/렌더 ---------------- */
-    const markerMap=new Map(); // id -> {group, marker, data, seq}
+    const markerMap=new Map();
     let unsubMain=null, unsubPending=null;
 
     function subscribeMarkers(){
@@ -1129,6 +1135,7 @@
       unsubMain=onSnapshot(qApproved, s=>{
         s.docChanges().forEach(renderChange);
         recomputeSeqs();
+        tryOpenDeepLink(); // ✅ 데이터 도착 후 한 번 시도
       });
 
       if (isAdmin){
@@ -1136,6 +1143,7 @@
         unsubPending=onSnapshot(qPending, s=>{
           s.docChanges().forEach(renderChange);
           recomputeSeqs();
+          tryOpenDeepLink();
         });
       }
     }
@@ -1304,6 +1312,7 @@
     const $infoMediaTop=document.getElementById('infoMediaTop');
     const $infoBtns=document.getElementById('infoBtns');
     const $infoPk=document.getElementById('infoPk');
+    const $copyLinkBtn=document.getElementById('copyLinkBtn');
 
     const $carousel=document.getElementById('infoCarousel');
     const $carInner=document.getElementById('carInner');
@@ -1368,7 +1377,6 @@
           raw.push({ ...c, _hidden:hidden });
         });
 
-        // 신고 카운터
         const items = await Promise.all(raw.map(async c=>{
           let cnt = c.reportPendingCount || 0;
           try{
@@ -1377,7 +1385,6 @@
               const s = await getDocs(q); cnt = s.size || 0;
             }
           }catch(_e){}
-          // 닉/랭크 표기 교체
           const disp = await getDisplayForUid(c.uid);
           return { ...c, _repCnt: cnt, _disp: disp };
         }));
@@ -1505,8 +1512,7 @@
       $infoMediaTop.innerHTML = mediaTopEl(m);
       $infoBody.textContent = m.body||'';
 
-      const pokemonCats = ['와일드 존','우두머리 포켓몬','메가 포켓몬'];
-      if (pokemonCats.includes(m.category) && Array.isArray(m.pokemon) && m.pokemon.length){
+      if (POKEMON_CATS.includes(m.category) && Array.isArray(m.pokemon) && m.pokemon.length){
         $infoPk.style.display='flex';
         $infoPk.innerHTML = m.pokemon.map(n=>`<span class="tag" data-pk="${esc(n)}">${esc(n)}</span>`).join('');
         $infoPk.onclick = (e)=>{
@@ -1623,6 +1629,18 @@
         }
       };
 
+      /* ✅ 링크 복사 */
+      $copyLinkBtn.onclick = async ()=>{
+        const url = new URL(location.href);
+        url.searchParams.set('mid', m.id);
+        try{
+          await navigator.clipboard.writeText(url.toString());
+          alert('링크를 클립보드에 복사했습니다.');
+        }catch{
+          prompt('복사할 링크입니다. 수동으로 복사해주세요:', url.toString());
+        }
+      };
+
       $info.style.display='block';
       openComments(m);
     }
@@ -1630,6 +1648,20 @@
     const $infoClose=document.getElementById('infoClose');
     let currentOpenId=null;
     $infoClose.onclick=()=>{ $info.style.display='none'; currentOpenId=null; if (unsubComments){unsubComments();unsubComments=null;} };
+
+    /* ✅ 딥링크 (?mid=) */
+    let deepLinkTried = false;
+    function tryOpenDeepLink(){
+      if (deepLinkTried) return;
+      const mid = new URL(location.href).searchParams.get('mid');
+      if (!mid) { deepLinkTried = true; return; }
+      const rec = markerMap.get(mid);
+      if (rec){
+        deepLinkTried = true;
+        openInfoWithSeq(rec.data);
+        map.panTo([rec.data.y, rec.data.x]);
+      }
+    }
 
     /* ---------------- 모드 전환 ---------------- */
     let mode='search';
@@ -1672,11 +1704,10 @@
     pkAddInput.addEventListener('keydown', e=>{ if(e.key==='Enter') addPk(); });
     pkAddClear.onclick = ()=>{ pkList=[]; redrawPkChips(); };
 
-    const pokemonCats = ['와일드 존','우두머리 포켓몬','메가 포켓몬'];
-    catSel.addEventListener('change', ()=>{ pkEditor.style.display = pokemonCats.includes(catSel.value) ? 'block' : 'none'; });
+    catSel.addEventListener('change', ()=>{ pkEditor.style.display = POKEMON_CATS.includes(catSel.value) ? 'block' : 'none'; });
 
     let pending=null;
-    map.on('click', async (e)=>{
+    map.on('click', (e)=>{
       if (mode!=='place') return;
       if(!me){ alert('로그인 후 등록할 수 있어요.'); return; }
       if(!isInside(e.latlng)){ alert('맵 바깥에는 등록할 수 없습니다'); return; }
@@ -1684,7 +1715,7 @@
       t.value=''; b.value=''; imgsInp.value=''; videoInp.value='';
       pkList=[]; redrawPkChips();
       if (!catSel.value) catSel.value=CATEGORIES[0].key;
-      pkEditor.style.display = pokemonCats.includes(catSel.value) ? 'block' : 'none';
+      pkEditor.style.display = POKEMON_CATS.includes(catSel.value) ? 'block' : 'none';
       modal.style.display='flex';
     });
 
@@ -1700,7 +1731,6 @@
       const prevTxt = saveBtn.textContent;
       saveBtn.disabled = true;
       try {
-        // 프로필 닉네임 사용
         const pfSnap = await getDoc(doc(db,'profiles', me.uid)).catch(()=>null);
         const displayName = (pfSnap && pfSnap.exists() && pfSnap.data().nick) || (me.displayName || '익명');
 
@@ -1717,7 +1747,7 @@
         const thumbUrl = media.length ? media[0].url : null;
 
         setBtn('저장 중…');
-        const inPkCat = pokemonCats.includes(catSel.value);
+        const inPkCat = POKEMON_CATS.includes(catSel.value);
         await addDoc(collection(db,'markers'), {
           x: pending.lng, y: pending.lat,
           title: t.value, body: b.value,
@@ -1792,11 +1822,7 @@
       alert('프로필이 저장되었습니다.');
     };
 
-    /* ====== 공지 시스템 ======
-       컬렉션: notices (doc: {title, body, files:[{name,url}], createdAt, authorUid})
-       보기 차단: noticeSuppress/{uid} (doc: {until: Timestamp})
-       최근 공지 자동 팝업 (최초 로그인 화면보다 아래) + 비로그인 유저는 매 방문마다 노출
-    */
+    /* ====== 공지 시스템 ====== */
     const noticeModal = document.getElementById('noticeModal');
     const noticeListModal = document.getElementById('noticeListModal');
     const ntListWrap = document.getElementById('ntListWrap');
@@ -1862,7 +1888,7 @@
       noticeBody.textContent = v.body||'';
       noticeDate.textContent = new Date(toMs(v.createdAt||Date.now())).toLocaleString();
       if (Array.isArray(v.files)&&v.files.length){
-        noticeFiles.innerHTML = v.files.map(f=>`<div><a href="${f.url}" target="_blank" rel="noopener">${esc(f.name||'파일')}</a></div>`).join('');
+        noticeFiles.innerHTML = v.files.map(f=>`<div><a href="${f.url}" target="_blank" rel="noopener noreferrer">${esc(f.name||'파일')}</a></div>`).join(''); /* rel 보강 */
       } else noticeFiles.innerHTML='';
 
       if (isAdmin){
@@ -1883,6 +1909,15 @@
     }
     noticeClose.onclick = ()=> noticeModal.style.display='none';
     noticeModal.addEventListener('click', (e)=>{ if(e.target===noticeModal) noticeModal.style.display='none'; });
+
+    function editNotice(id, v){
+      noticeEdit.style.display='block';
+      noticeView.style.display='none';
+      ntTitle.value = v.title||'';
+      ntBody.value  = v.body||'';
+      noticeModal.style.display='flex';
+      currentNoticeId = id;
+    }
 
     ntNew.onclick = ()=> {
       noticeEdit.style.display='block';
@@ -1909,17 +1944,20 @@
         authorUid: me?.uid||null,
         createdAt: serverTimestamp()
       };
-      const docRef = await addDoc(collection(db,'notices'), payload);
+      const docRef = currentNoticeId
+        ? (await updateDoc(doc(db,'notices', currentNoticeId), payload), { id: currentNoticeId })
+        : await addDoc(collection(db,'notices'), payload);
       noticeModal.style.display='none';
-      // 관리진 메신저에 특수 공지 메세지 삽입
-      await addDoc(collection(db,'adminChat'), {
-        type:'notice',
-        noticeId: docRef.id,
-        title: payload.title,
-        body: payload.body,
-        createdAt: serverTimestamp(),
-        uid: me?.uid||null
-      });
+      if (!currentNoticeId){
+        await addDoc(collection(db,'adminChat'), {
+          type:'notice',
+          noticeId: docRef.id,
+          title: payload.title,
+          body: payload.body,
+          createdAt: serverTimestamp(),
+          uid: me?.uid||null
+        });
+      }
       openNoticeList();
       renderNoticeList();
     };
@@ -1937,32 +1975,25 @@
     // 최근 공지 자동 팝업
     async function autoPopupLatestNotice(){
       if (!firebaseOk) return;
-      // 가장 최근 1개
       const qs = query(collection(db,'notices'), orderBy('createdAt','desc'), limit(1));
       const s = await getDocs(qs);
       if (s.empty) return;
       const d = s.docs[0]; const v = d.data()||{};
-      // 비로그인: 항상 표시
       if (!me){
         openNotice(d.id);
         return;
       }
-      // 로그인: 억제 확인
       try{
         const sup = await getDoc(doc(db,'noticeSuppress', me.uid));
         const until = toMs(sup?.data()?.until);
-        if (until && until > Date.now()) return; // 억제중
+        if (until && until > Date.now()) return;
       }catch{}
       openNotice(d.id);
     }
 
-    // 최초 로그인 이후 한 번 자동 팝업
     setTimeout(autoPopupLatestNotice, 1200);
 
-    /* ====== 관리진 메신저 ======
-       컬렉션: adminChat (doc: {uid, body, type('text'|'notice'), noticeId?, createdAt})
-       lastSeen: adminSeen/{uid} { last: Timestamp }
-    */
+    /* ====== 관리진 메신저 ====== */
     const messengerModal = document.getElementById('messengerModal');
     const chatBox = document.getElementById('chatBox');
     const msgInput = document.getElementById('msgInput');
@@ -2025,7 +2056,6 @@
     }
     function wireAdminMessenger(){
       if (!firebaseOk || !isAdmin || !me) { $msgBang.classList.remove('show'); return; }
-      // 새 메세지 감지 → ! 표시
       const unsubs = [];
       Promise.all([
         getDoc(doc(db,'adminSeen', me.uid)).catch(()=>null)
@@ -2042,6 +2072,23 @@
         }));
       });
     }
+
+    /* ===== 키보드 단축키 ===== */
+    document.addEventListener('keydown', (e)=>{
+      // 입력창/textarea에서는 패스
+      if (['INPUT','TEXTAREA'].includes((e.target||{}).tagName)) return;
+      if (e.key === '/') { e.preventDefault(); qInput.focus(); }
+      if (e.key.toLowerCase() === 's') { e.preventDefault(); side.style.display = (side.style.display==='block'?'none':'block'); }
+      if (e.key.toLowerCase() === 'm') { e.preventDefault(); setMode(mode==='search'?'place':'search'); }
+      if (e.key === 'Escape'){
+        if (document.getElementById('modal').style.display==='flex') { document.getElementById('modal').style.display='none'; pending=null; return; }
+        if (document.getElementById('profileModal').style.display==='flex') { document.getElementById('profileModal').style.display='none'; return; }
+        if (document.getElementById('messengerModal').style.display==='flex') { document.getElementById('messengerModal').style.display='none'; return; }
+        if (document.getElementById('noticeModal').style.display==='flex') { document.getElementById('noticeModal').style.display='none'; return; }
+        if (document.getElementById('noticeListModal').style.display==='flex') { document.getElementById('noticeListModal').style.display='none'; return; }
+        if ($info.style.display==='block'){ $infoClose.click(); return; }
+      }
+    });
 
     /* ===== 페이지 진입 시: 최초 로그인시 닉네임 안내 ===== */
     // onAuthStateChanged → ensureProfileOnLogin()에서 팝업
