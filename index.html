@@ -19,7 +19,7 @@
     .tbtn{background:#2a2f3a;color:#ddd;border:0;border-radius:8px;padding:6px 10px;cursor:pointer}
     .tbtn.on{background:#3d6cff;color:#fff}
 
-    /* 우측 상단 컨트롤 (공지/메신저) */
+    /* 우측 상단 컨트롤 (건의/공지/메신저) */
     .top-right {
       position: fixed; right:10px; top:10px; z-index: 1400;
       display:flex; gap:8px; align-items:center;
@@ -40,9 +40,10 @@
     .flt-wrap{display:flex; flex-wrap:wrap; gap:8px}
     .flt{
       border:1px solid #303645; background:#202532; color:#c9cfdd; padding:6px 10px;
-      border-radius:999px; cursor:pointer; font-size:13px;
+      border-radius:999px; cursor:pointer; font-size:13px; position:relative;
     }
     .flt.on{background:#3d6cff; border-color:#3d6cff; color:#fff}
+    .flt .progress{position:absolute; bottom:2px; left:50%; transform:translateX(-50%); font-size:10px; opacity:.8}
     .hr{height:1px; background:#2a3040; margin:12px 0}
     .inp{width:100%; box-sizing:border-box; background:#1117; color:#eef; border:1px solid #303645; border-radius:10px; padding:8px}
     .row{display:flex; gap:8px; align-items:center}
@@ -63,7 +64,7 @@
     #info{position:fixed; right:10px; bottom:10px; width:420px; max-height:75%;
       overflow:auto; z-index:1500; display:none; background:#1e1e1e; color:#ddd;
       border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.35);}
-    #info header{display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #333}
+    #info header{display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #333; flex-wrap:wrap}
     #info .thumb{width:100%; max-height:260px; object-fit:cover; background:#000}
     #info .pad{padding:12px}
     #info .meta{font-size:12px; color:#aaa; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
@@ -75,8 +76,10 @@
     #info .media video{width:100%; max-height:260px}
     #info .media img{width:100%; max-height:260px; object-fit:cover}
     #info .idtag{background:#263238; color:#cfd8dc; padding:2px 6px; border-radius:6px; font-size:11px}
+    #info .view-count{font-size:11px; color:#888; margin-left:auto}
     .pk-tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
     .pk-tags .tag{background:#223; border:1px solid #345; color:#cfe; padding:2px 8px; border-radius:999px; font-size:12px; cursor:pointer}
+    
     /* 캐러셀 */
     .carousel{ position:relative; width:100%; margin-top:12px; background:#141414; border-radius:10px; overflow:hidden }
     .carousel .inner{ display:flex; transition: transform .3s ease }
@@ -91,26 +94,78 @@
     .carousel .dots{ position:absolute; left:0; right:0; bottom:6px; display:flex; justify-content:center; gap:6px }
     .carousel .dot{ width:8px; height:8px; border-radius:50%; background:#6a6a6a; }
     .carousel .dot.on{ background:#fff }
+    
     /* 댓글 */
     #comments{ margin-top:12px; }
     #comments .cform textarea{ width:100%; box-sizing:border-box; background:#111; color:#eee; border:1px solid #333; border-radius:8px; padding:8px }
     #comments .cform .row{ display:flex; gap:8px; margin-top:8px }
     #comments .cform button{ background:#3d6cff; border:0; color:#fff; padding:6px 10px; border-radius:8px }
     #comments .clist{ margin-top:10px; display:grid; gap:10px }
-    .citem{ background:#151515; border:1px solid #2a2a2a; border-radius:10px; padding:10px }
+    .citem{ background:#151515; border:1px solid #2a2a2a; border-radius:10px; padding:10px; opacity:1; transition:opacity .2s }
+    .citem.inactive{ opacity:0.4 }
     .citem .meta{ font-size:12px; color:#aaa; display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+    .citem .meta .clickable{ cursor:pointer; text-decoration:underline }
     .citem .act{ display:flex; gap:8px; margin-top:6px }
     .citem .btn{ background:#2a2a2a; color:#fff; border:0; padding:4px 8px; border-radius:8px; cursor:pointer }
     .citem .btn.warn{ background:#ff5252 }
+    .citem .reactions{display:flex; gap:4px; margin-top:6px; font-size:11px}
+    .citem .reactions span{background:#2a2a2a; padding:2px 6px; border-radius:4px}
     .badge-report{background:#ff9800;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
     .badge-hidden{background:#90caf9;color:#111;padding:2px 6px;border-radius:6px;font-size:11px}
 
+    /* 반응 컨텍스트 메뉴 */
+    .reaction-menu{
+      position:fixed; background:#1e1e1e; border:1px solid #333; border-radius:8px; padding:8px;
+      display:none; z-index:2000; box-shadow:0 4px 12px rgba(0,0,0,.5)
+    }
+    .reaction-menu button{
+      background:transparent; border:0; color:#fff; padding:4px 8px; cursor:pointer;
+      font-size:16px; border-radius:4px
+    }
+    .reaction-menu button:hover{background:#2a2a2a}
+
     /* 입력/설정 모달 */
-    #modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal{display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;}
-    .panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px}
+    #modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal{
+      display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;
+    }
+    .panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px; max-height:85vh; overflow:auto}
     .panel.wide{width:min(720px, 96vw)}
     .panel input,.panel textarea,.panel select{width:100%; box-sizing:border-box}
     small.muted{color:#a0a7b4}
+
+    /* XP 바 */
+    .xp-bar{
+      background:#2a2a2a; border-radius:8px; height:20px; position:relative; overflow:hidden; margin:8px 0
+    }
+    .xp-bar-fill{
+      background:linear-gradient(90deg, #3d6cff, #5d8cff); height:100%; transition:width .3s ease
+    }
+    .xp-bar-text{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-size:11px; font-weight:600; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.5)
+    }
+
+    /* 업적 배지 */
+    .achievement-badge{
+      display:inline-block; padding:4px 8px; border-radius:6px; font-size:11px; margin:2px;
+      background:#2a2a2a; border:1px solid #444
+    }
+    .achievement-badge.normal{border-color:#888; background:#333}
+    .achievement-badge.rare{border-color:#4a9eff; background:#1a3a5f}
+    .achievement-badge.epic{border-color:#a335ee; background:#3a1a5f}
+    .achievement-badge.legend{border-color:#ff8000; background:#5f3a1a}
+
+    /* 미션 */
+    .mission-item{
+      background:#2a2a2a; border:1px solid #444; border-radius:8px; padding:10px; margin:8px 0;
+      display:flex; justify-content:space-between; align-items:center
+    }
+    .mission-item.completed{opacity:.5}
+    .mission-item .mission-reward{color:#4a9eff; font-size:11px}
+
+    /* 신뢰도 색상 */
+    .trust-negative{color:#ff5252}
+    .trust-positive{color:#4caf50}
 
     /* 얌전한 인앱 안내 배너 */
     #inapp-banner {
@@ -121,12 +176,13 @@
     }
     #inapp-banner strong{ color:#fff; font-weight:600 }
 
-    /* 공지 특수 메시지(관리진 메신저 안에서 풀폭) */
+    /* 공지 특수 메시지 */
     .sys-notice {
       background:#0b3a70; color:#e6f1ff; border-radius:12px; padding:16px; margin:8px 0;
     }
     .sys-notice h4{ margin:0 0 6px 0; font-size:16px }
     .sys-notice p{ margin:0; opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .sys-notice .view-count{font-size:11px; opacity:.8; margin-top:4px}
 
     /* 메신저 채팅 버블 */
     .chat-wrap { max-height:60vh; overflow:auto; background:#0f1116; border:1px solid #2b3143; border-radius:12px; padding:12px }
@@ -136,6 +192,21 @@
     .bubble { max-width:70%; background:#1f2430; color:#e5e7eb; padding:8px 10px; border-radius:12px }
     .chat-row.other .bubble { background:#293146 }
     .chat-meta { font-size:11px; color:#aab; margin-top:4px }
+
+    /* 요주의 유저 섹션 */
+    .warning-users{background:#3a1f1f; border:1px solid #5f2f2f; border-radius:8px; padding:10px; margin:10px 0}
+    .warning-users h4{margin:0 0 8px 0; color:#ff8a80}
+    
+    /* 업적 팝업 */
+    .achievement-popup{
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:#1e1e1e; border:2px solid #ffd700; border-radius:12px; padding:20px;
+      z-index:3000; min-width:300px; text-align:center; animation:popIn .3s ease
+    }
+    @keyframes popIn{
+      from{transform:translate(-50%,-50%) scale(.8); opacity:0}
+      to{transform:translate(-50%,-50%) scale(1); opacity:1}
+    }
   </style>
 </head>
 <body>
@@ -147,13 +218,12 @@
   </div>
   <script> setTimeout(()=>{ if(!window.L){ document.getElementById('blockWarn').style.display='flex'; } }, 1500); </script>
 
-  <!-- ✅ 인앱 브라우저 감지: 안내 문구만 표시 (버튼 없음) -->
+  <!-- 인앱 브라우저 감지 -->
   <script>
   (function(){
     const PATTERNS = [/KAKAOTALK/i, /Line\//i, /Instagram/i, /FBAN|FBAV/i, /Twitter/i, /Snapchat/i, /MicroMessenger/i];
     const isInApp = PATTERNS.some(r => r.test(navigator.userAgent||''));
     if (!isInApp) return;
-
     const banner = document.createElement('div');
     banner.id = 'inapp-banner';
     banner.innerHTML = '<strong>안내</strong> · 앱 내 브라우저에서 접속 중입니다. ' +
@@ -173,10 +243,12 @@
     <button id="btnSearch" class="tbtn on" title="검색 모드(S)">검색 모드</button>
     <button id="btnPlace"  class="tbtn" title="핀 배치 모드(M)">핀 배치 모드</button>
     <button id="btnAdminReport" class="tbtn" style="display:none" title="신고 관리 모드">신고 관리 모드</button>
+    <button id="btnPendingOnly" class="tbtn" style="display:none" title="승인 대기 핀">승인 대기 핀</button>
   </div>
 
-  <!-- 우측 상단: 공지 / 메신저 -->
+  <!-- 우측 상단: 건의 / 공지 / 메신저 -->
   <div class="top-right">
+    <button id="btnSuggestList" class="pill-btn" title="건의 및 문의">건의 및 문의</button>
     <button id="btnNoticeList" class="pill-btn" title="공지 목록">공지</button>
     <button id="btnMsg" class="pill-btn" style="display:none" title="관리진 메신저">메세지 <span class="bang" id="msgBang">!</span></button>
   </div>
@@ -192,7 +264,6 @@
         <button id="fltWild" class="flt on" title="와일드 존 레이어 토글">와일드 존</button>
         <button id="fltAll" class="flt" title="전체 선택">전체 선택</button>
         <button id="fltNone" class="flt" title="전체 해제">전체 해제</button>
-        <button id="fltPending" class="flt" style="display:none" title="관리자: 승인 대기 핀만 보기">승인 대기 핀</button>
       </div>
     </div>
 
@@ -211,8 +282,14 @@
         <button class="flt" data-filt="ineligible">미충족</button>
       </div>
       <div id="repCommentList" class="rlist"></div>
+      
+      <div class="warning-users">
+        <h4>⚠️ 요주의 유저</h4>
+        <div id="warningUserList" style="font-size:12px"></div>
+      </div>
+      
       <div class="hr"></div>
-      <div style="font-size:12px;opacity:.8">관리자용 프록시(`adminReports`)와 댓글/숨김/보류 리포트를 병합해 표시합니다.</div>
+      <div style="font-size:12px;opacity:.8">관리자용 프록시와 댓글/숨김/보류 리포트를 병합해 표시합니다.</div>
     </div>
 
     <div class="hr"></div>
@@ -228,11 +305,24 @@
 
   <div id="map" role="application" aria-label="게임 월드 지도"></div>
 
+  <!-- 반응 메뉴 -->
+  <div id="reactionMenu" class="reaction-menu">
+    <button data-emoji="👍">👍</button>
+    <button data-emoji="😕">😕</button>
+    <button data-emoji="❤️">❤️</button>
+    <button data-emoji="❓">❓</button>
+    <button data-emoji="❗">❗</button>
+    <button data-emoji="✓">✓</button>
+    <button data-emoji="✘">✘</button>
+  </div>
+
   <!-- 우하단 상세 패널 -->
   <aside id="info" aria-live="polite">
     <header>
       <h3 id="infoTitle">(제목)</h3>
       <span id="infoId" class="idtag">#-</span>
+      <button id="btnConfirm" title="확인 표시">✓</button>
+      <span class="view-count" id="pinViewCount">조회 -</span>
       <button id="copyLinkBtn" title="이 핀 링크 복사">링크복사</button>
       <button id="infoClose" title="닫기(Esc)">닫기</button>
     </header>
@@ -241,6 +331,7 @@
       <div class="meta" id="infoMeta"></div>
       <div id="infoPk" class="pk-tags"></div>
       <div id="infoBody" style="white-space:pre-wrap; margin-top:8px"></div>
+      <div id="pinReactions" class="reactions"></div>
 
       <div id="infoCarousel" class="carousel" style="display:none">
         <div class="inner" id="carInner"></div>
@@ -269,11 +360,35 @@
       <input id="mTitle" class="inp" placeholder="제목" />
       <textarea id="mBody" class="inp" rows="4" placeholder="공략/설명(줄바꿈 가능)"></textarea>
 
-      <!-- ✅ 닉네임 선택 UI 제거: 프로필의 닉네임/랭크로만 표기 -->
-
       <label style="display:block;margin-top:8px">카테고리</label>
       <select id="mCat" class="inp"></select>
       <small class="muted">카테고리 아이콘은 Firestore <code>categories/{카테고리키}.iconUrl</code>로 전역 변경</small>
+
+      <!-- 기술머신 -->
+      <div id="tmEditor" style="display:none; margin-top:10px">
+        <label>기술머신 번호</label>
+        <input id="tmNumber" class="inp" placeholder="예: 001" />
+        <label style="margin-top:8px">기술머신 이름</label>
+        <input id="tmName" class="inp" placeholder="예: 몸통박치기" />
+      </div>
+
+      <!-- 메가스톤 -->
+      <div id="megaEditor" style="display:none; margin-top:10px">
+        <label>포켓몬 이름</label>
+        <input id="megaPokemon" class="inp" placeholder="예: 리자몽" />
+      </div>
+
+      <!-- 미션 -->
+      <div id="missionEditor" style="display:none; margin-top:10px">
+        <label>미션 번호</label>
+        <input id="missionNumber" class="inp" placeholder="예: M-01" />
+      </div>
+
+      <!-- 아이템 -->
+      <div id="itemEditor" style="display:none; margin-top:10px">
+        <label>아이템 이름</label>
+        <input id="itemName" class="inp" placeholder="아이템 이름 입력" />
+      </div>
 
       <!-- 포켓몬 지정 -->
       <div id="pkEditor" style="display:none; margin-top:10px">
@@ -298,18 +413,63 @@
     </div>
   </div>
 
-  <!-- ✅ 프로필 모달 -->
+  <!-- 프로필 모달 -->
   <div id="profileModal">
     <div class="panel">
       <h3>프로필 설정</h3>
       <div id="pfWho" style="font-size:12px; opacity:.8; margin-bottom:6px">(로그인 필요)</div>
+      
+      <!-- 업적 전시 -->
+      <div id="pfAchievements" style="margin-bottom:12px">
+        <strong>전시 업적</strong>
+        <div id="pfAchievementList" style="margin-top:6px"></div>
+        <button id="pfManageAchievements" class="tbtn" style="margin-top:6px">업적 관리</button>
+      </div>
+      
       <label>닉네임</label>
       <input id="pfNick" class="inp" maxlength="24" placeholder="지도에 표시될 이름" />
       <div class="hr"></div>
+      
       <div><strong>내 랭크</strong> · <span id="pfRank">(Z)</span></div>
-      <div style="font-size:12px; opacity:.85; margin:6px 0">다음 랭크까지 <span id="pfRemain">-</span></div>
-      <div style="font-size:12px; opacity:.85">경험치 얻는 법: 핀 등록(+100 XP), 댓글(+10 XP)</div>
+      <div style="font-size:12px; opacity:.85; margin:6px 0">
+        <strong>신뢰도:</strong> <span id="pfTrust">10</span>
+      </div>
+      
+      <!-- XP 바 -->
+      <div class="xp-bar">
+        <div class="xp-bar-fill" id="pfXpFill"></div>
+        <div class="xp-bar-text" id="pfXpText">0 / 100 XP</div>
+      </div>
+      
+      <div style="font-size:12px; opacity:.85">
+        <strong>총 조회수:</strong> <span id="pfTotalViews">0</span>
+      </div>
+      <div style="font-size:12px; opacity:.85">
+        <strong>총 반응 수:</strong> <span id="pfTotalReactions">0</span>
+      </div>
+      
       <div class="hr"></div>
+      <div style="font-size:12px; opacity:.85; margin:6px 0">
+        <strong>경험치 획득 방법:</strong><br>
+        • 핀 등록: +100 XP<br>
+        • 댓글 작성: +10 XP<br>
+        • 신고 승인: 핀 작성의 110% (+110 XP)
+      </div>
+      
+      <div class="hr"></div>
+      <div style="font-size:12px; opacity:.85; margin:6px 0">
+        <strong>신뢰도 시스템:</strong><br>
+        • 기본 신뢰도: 10 (최대 100)<br>
+        • 핀 등록: +10<br>
+        • 댓글 등록: +5<br>
+        • 신고 접수: -10<br>
+        • 신고 승인: 추가 -10<br>
+        • 신고 반려: +15
+      </div>
+      
+      <div class="hr"></div>
+      <button id="pfTrustHistory" class="tbtn" style="margin-bottom:8px">신뢰도 내역</button>
+      
       <div style="text-align:right">
         <button id="pfClose">닫기</button>
         <button id="pfSave" class="tbtn on">저장</button>
@@ -317,7 +477,60 @@
     </div>
   </div>
 
-  <!-- ✅ 관리자 메신저 모달 -->
+  <!-- 타 유저 프로필 모달 -->
+  <div id="otherProfileModal">
+    <div class="panel">
+      <h3>유저 프로필</h3>
+      <div id="opNick" style="font-size:18px; font-weight:600; margin-bottom:8px"></div>
+      
+      <div id="opAchievements" style="margin-bottom:12px">
+        <strong>전시 업적</strong>
+        <div id="opAchievementList" style="margin-top:6px"></div>
+      </div>
+      
+      <div style="font-size:14px; margin:6px 0">
+        <strong>랭크:</strong> <span id="opRank">Z</span>
+      </div>
+      <div style="font-size:14px; margin:6px 0">
+        <strong>신뢰도:</strong> <span id="opTrust">10</span>
+      </div>
+      <div style="font-size:14px; margin:6px 0">
+        <strong>총 경험치:</strong> <span id="opXp">0</span> XP
+      </div>
+      <div style="font-size:14px; margin:6px 0">
+        <strong>총 조회수:</strong> <span id="opViews">0</span>
+      </div>
+      
+      <div style="text-align:right; margin-top:16px">
+        <button id="opClose" class="tbtn">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 신뢰도 내역 모달 -->
+  <div id="trustHistoryModal">
+    <div class="panel">
+      <h3>신뢰도 내역</h3>
+      <div id="trustHistoryList" style="max-height:400px; overflow:auto; margin:12px 0"></div>
+      <div style="text-align:right">
+        <button id="thClose" class="tbtn">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 업적 관리 모달 -->
+  <div id="achievementModal">
+    <div class="panel">
+      <h3>업적 관리</h3>
+      <p style="font-size:12px; opacity:.8">달성한 업적 중 최대 3개를 프로필에 전시할 수 있습니다.</p>
+      <div id="achievementList" style="max-height:400px; overflow:auto; margin:12px 0"></div>
+      <div style="text-align:right">
+        <button id="achClose" class="tbtn">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 관리자 메신저 모달 -->
   <div id="messengerModal">
     <div class="panel wide">
       <h3 style="display:flex;justify-content:space-between;align-items:center">
@@ -335,7 +548,7 @@
     </div>
   </div>
 
-  <!-- ✅ 공지 작성/보기 모달 -->
+  <!-- 공지 작성/보기 모달 -->
   <div id="noticeModal">
     <div class="panel wide">
       <h3 style="display:flex;justify-content:space-between;align-items:center">
@@ -345,7 +558,10 @@
         </span>
       </h3>
       <div id="noticeView" style="display:none">
-        <div style="font-size:12px;opacity:.8;margin-bottom:6px" id="noticeDate"></div>
+        <div style="font-size:12px;opacity:.8;margin-bottom:6px; display:flex; justify-content:space-between" id="noticeViewMeta">
+          <span id="noticeDate"></span>
+          <span class="view-count" id="noticeViewCount">조회 -</span>
+        </div>
         <h3 id="noticeTitle"></h3>
         <div id="noticeBody" style="white-space:pre-wrap;margin-top:8px"></div>
         <div id="noticeFiles" style="margin-top:10px"></div>
@@ -370,7 +586,7 @@
     </div>
   </div>
 
-  <!-- ✅ 공지 목록 모달 -->
+  <!-- 공지 목록 모달 -->
   <div id="noticeListModal">
     <div class="panel wide">
       <h3 style="display:flex;justify-content:space-between;align-items:center">
@@ -384,6 +600,89 @@
     </div>
   </div>
 
+  <!-- 건의 및 문의 목록 모달 -->
+  <div id="suggestListModal">
+    <div class="panel wide">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        건의 및 문의
+        <span style="display:flex;gap:8px;align-items:center">
+          <button id="sgNew" class="tbtn">작성하기</button>
+          <button id="sgListClose" class="tbtn">닫기</button>
+        </span>
+      </h3>
+      <div id="sgListWrap" style="max-height:60vh;overflow:auto"></div>
+    </div>
+  </div>
+
+  <!-- 건의 및 문의 상세/작성 모달 -->
+  <div id="suggestModal">
+    <div class="panel wide">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        건의 및 문의
+        <span>
+          <button id="sgClose" class="tbtn">닫기</button>
+        </span>
+      </h3>
+      
+      <div id="sgView" style="display:none">
+        <div style="font-size:12px;opacity:.8;margin-bottom:6px" id="sgDate"></div>
+        <h3 id="sgTitle"></h3>
+        <div id="sgBody" style="white-space:pre-wrap;margin-top:8px"></div>
+        
+        <div class="hr"></div>
+        <h4>답변</h4>
+        <div id="sgReplies" style="margin-top:8px"></div>
+        
+        <div id="sgReplyForm" style="display:none; margin-top:12px">
+          <textarea id="sgReplyBody" class="inp" rows="3" placeholder="답변 입력 (관리자 전용)"></textarea>
+          <div style="text-align:right; margin-top:8px">
+            <button id="sgReplySubmit" class="tbtn on">답변 등록</button>
+          </div>
+        </div>
+      </div>
+      
+      <div id="sgEdit" style="display:none">
+        <label>제목</label>
+        <input id="sgEditTitle" class="inp" maxlength="80" />
+        <label style="margin-top:8px;display:block">내용</label>
+        <textarea id="sgEditBody" class="inp" rows="6"></textarea>
+        <div style="text-align:right;margin-top:10px">
+          <button id="sgEditCancel" class="tbtn">취소</button>
+          <button id="sgEditSave" class="tbtn on">등록</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 미션 모달 -->
+  <div id="missionsModal">
+    <div class="panel">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        미션
+        <button id="missionsClose" class="tbtn">닫기</button>
+      </h3>
+      
+      <h4>일일 미션</h4>
+      <div id="dailyMissions"></div>
+      
+      <div class="hr"></div>
+      
+      <h4>주간 미션</h4>
+      <div id="weeklyMissions"></div>
+    </div>
+  </div>
+
+  <!-- 업적 리스트 (관리자) 모달 -->
+  <div id="achievementListModal">
+    <div class="panel wide">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        전체 업적 리스트
+        <button id="achListClose" class="tbtn">닫기</button>
+      </h3>
+      <div id="achListContent" style="max-height:60vh;overflow:auto"></div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module">
     /* ---------------- 유틸 ---------------- */
@@ -392,8 +691,8 @@
     const esc = (s)=> (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const nowMs = ()=> Date.now();
     const HIDE_MS = 48 * 3600 * 1000;
-    const HIDE_DELAY_MS = 2 * 3600 * 1000; // 2시간
-    const HIDE_COUNT = 5;                   // 5회
+    const HIDE_DELAY_MS = 2 * 3600 * 1000;
+    const HIDE_COUNT = 5;
     const toMs = (t)=>{
       if (!t) return null;
       if (t.toMillis) return t.toMillis();
@@ -414,7 +713,12 @@
     /* ---------------- Leaflet ---------------- */
     const IMG_URL = "za_world_map_clean_fixed.png";
     const IMG_W = 2048, IMG_H = 2048;
-    const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 4 });
+    const map = L.map('map', { 
+      crs: L.CRS.Simple, 
+      minZoom: -2, 
+      maxZoom: 4,
+      zoomControl: false  // ✅ 줌 컨트롤 제거
+    });
     const bounds = [[0,0],[IMG_H,IMG_W]];
     L.imageOverlay(IMG_URL, bounds).addTo(map);
     map.fitBounds(bounds);
@@ -434,7 +738,7 @@
     let app, auth, db, st;
     let GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged;
     let collection, collectionGroup, addDoc, serverTimestamp, onSnapshot,
-        orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit;
+        orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit, arrayUnion, arrayRemove;
     let ref, getDownloadURL, uploadBytesResumable, uploadBytes;
 
     try {
@@ -448,7 +752,7 @@
         apiKey: "AIzaSyCam7y7qNINoxBlTeGx7CDlP8Y77pXFMWA",
         authDomain: "za-maps-32982.firebaseapp.com",
         projectId: "za-maps-32982",
-        storageBucket: "za-maps-32982.firebasestorage.app",
+        storageBucket: "za-maps-32982.appspot.com",
         messagingSenderId: "804333155537",
         appId: "1:804333155537:web:504bc3ee175e3678bc81f0",
         measurementId: "G-GTRK8JEZFM"
@@ -458,7 +762,7 @@
       db   = fsMod.getFirestore(app);
       st   = stMod.getStorage(app);
       ({ GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } = authMod);
-      ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit } = fsMod);
+      ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit, arrayUnion, arrayRemove } = fsMod);
       ({ ref, getDownloadURL, uploadBytesResumable, uploadBytes } = stMod);
     } catch (e) {
       firebaseOk = false;
@@ -466,6 +770,10 @@
     }
 
     /* ---------------- 업로드 유틸 ---------------- */
+    async function safeMergeDoc(pathArr, data){
+      if (!firebaseOk) return;
+      await setDoc(doc(db, ...pathArr), data, { merge: true });
+    }
     const safeName = (name)=> name.normalize('NFKD').replace(/[^\w.\-]+/g,'_').replace(/_+/g,'_').slice(-80);
     globalThis.uploadSmart = async function uploadSmart(file, folder, onProgress, label='업로드'){
       if (!firebaseOk) throw new Error('Firebase unavailable');
@@ -491,32 +799,38 @@
 
     /* ---------------- 카테고리 ---------------- */
     const CATEGORIES = [
-      {key:'홀로베이터',     label:'홀로베이터',     defaultIcon:'holovator.png'},
-      {key:'와일드 존',       label:'와일드 존',       defaultIcon:'wild_zone.png'},
-      {key:'중요한 장소',     label:'중요한 장소',     defaultIcon:'poi.png'},
-      {key:'부티크',         label:'부티크',         defaultIcon:'boutique.png'},
-      {key:'포켓몬 센터',     label:'포켓몬 센터',     defaultIcon:'pokemon_center.png'},
-      {key:'카페',           label:'카페',           defaultIcon:'cafe.png'},
-      {key:'레스토랑',       label:'레스토랑',       defaultIcon:'restaurant.png'},
-      {key:'헤어 살롱',       label:'헤어 살롱',       defaultIcon:'hair_salon.png'},
-      {key:'컬러풀한 나사',   label:'컬러풀한 나사',   defaultIcon:'colorful_screw.png'},
-      {key:'기술머신',       label:'기술머신',       defaultIcon:'tm.png'},
-      {key:'메가스톤',       label:'메가스톤',       defaultIcon:'mega_stone.png'},
-      {key:'중요 아이템',     label:'중요 아이템',     defaultIcon:'key_item.png'},
-      {key:'포켓몬 볼',       label:'포켓몬 볼',       defaultIcon:'poke_ball.png'},
-      {key:'회복 아이템',     label:'회복 아이템',     defaultIcon:'medicine.png'},
-      {key:'보물',           label:'보물',           defaultIcon:'treasure.png'},
-      {key:'기타 아이템',     label:'기타 아이템',     defaultIcon:'other_item.png'},
-      {key:'메인 임무',       label:'메인 임무',       defaultIcon:'main_mission.png'},
-      {key:'사이드 임무',       label:'사이드 임무',       defaultIcon:'side_mission.png'},
-      {key:'승급전',         label:'승급전',         defaultIcon:'promotion_match.png'},
-      {key:'사다리',         label:'사다리',         defaultIcon:'ladder.png'},
-      {key:'NPC',            label:'NPC',            defaultIcon:'npc.png'},
-      {key:'기타',           label:'기타',           defaultIcon:'misc.png'},
-      {key:'우두머리 포켓몬', label:'우두머리 포켓몬', defaultIcon:'alpha_pokemon.png'},
-      {key:'메가 포켓몬',     label:'메가 포켓몬',     defaultIcon:'mega_pokemon.png'},
+      {key:'장소-와일드 존',       label:'와일드 존',       defaultIcon:'wild_zone.png', group:'장소'},
+      {key:'장소-중요한 장소',     label:'중요한 장소',     defaultIcon:'poi.png', group:'장소'},
+      {key:'장소-포켓몬 센터',     label:'포켓몬 센터',     defaultIcon:'pokemon_center.png', group:'장소'},
+      {key:'장소-카페',           label:'카페',           defaultIcon:'cafe.png', group:'장소'},
+      {key:'장소-레스토랑',       label:'레스토랑',       defaultIcon:'restaurant.png', group:'장소'},
+      {key:'장소-헤어살롱',       label:'헤어 살롱',       defaultIcon:'hair_salon.png', group:'장소'},
+      {key:'장소-부티크',         label:'부티크',         defaultIcon:'boutique.png', group:'장소'},
+      {key:'아이템-컬러풀한 나사',   label:'컬러풀한 나사',   defaultIcon:'colorful_screw.png', group:'아이템'},
+      {key:'아이템-중요 아이템',     label:'중요 아이템',     defaultIcon:'key_item.png', group:'아이템'},
+      {key:'아이템-보물',           label:'보물',           defaultIcon:'treasure.png', group:'아이템'},
+      {key:'아이템-메가스톤',       label:'메가스톤',       defaultIcon:'mega_stone.png', group:'아이템'},
+      {key:'아이템-포켓몬 볼',       label:'포켓몬 볼',       defaultIcon:'poke_ball.png', group:'아이템'},
+      {key:'아이템-회복 아이템',     label:'회복 아이템',     defaultIcon:'medicine.png', group:'아이템'},
+      {key:'아이템-기타 아이템',     label:'기타 아이템',     defaultIcon:'other_item.png', group:'아이템'},
+      {key:'임무-메인 임무',       label:'메인 임무',       defaultIcon:'main_mission.png', group:'임무'},
+      {key:'임무-사이드 임무',     label:'사이드 임무',     defaultIcon:'side_mission.png', group:'임무'},
+      {key:'임무-승급전',         label:'승급전',         defaultIcon:'promotion_match.png', group:'임무'},
+      {key:'임무-NPC',            label:'NPC',            defaultIcon:'npc.png', group:'임무'},
+      {key:'포켓몬-메가 포켓몬',     label:'메가 포켓몬',     defaultIcon:'mega_pokemon.png', group:'포켓몬'},
+      {key:'포켓몬-우두머리 포켓몬', label:'우두머리 포켓몬', defaultIcon:'alpha_pokemon.png', group:'포켓몬'},
+      {key:'기타-홀로베이터',     label:'홀로베이터',     defaultIcon:'holovator.png', group:'기타'},
+      {key:'기타-사다리',         label:'사다리',         defaultIcon:'ladder.png', group:'기타'},
+      {key:'기타-기술머신',       label:'기술머신',       defaultIcon:'tm.png', group:'기타'},
+      {key:'기타-기타',           label:'기타',           defaultIcon:'misc.png', group:'기타'},
     ];
-    const POKEMON_CATS = ['와일드 존','우두머리 포켓몬','메가 포켓몬']; // ✅ 중복 제거된 단일 상수
+    
+    const POKEMON_CATS = ['장소-와일드 존','포켓몬-우두머리 포켓몬','포켓몬-메가 포켓몬'];
+    const TM_CAT = '기타-기술머신';
+    const MEGA_STONE_CAT = '아이템-메가스톤';
+    const MISSION_CATS = ['임무-메인 임무', '임무-사이드 임무'];
+    const ITEM_CATS = ['아이템-중요 아이템', '아이템-포켓몬 볼', '아이템-회복 아이템', '아이템-보물', '아이템-기타 아이템'];
+    
     const catSel = document.getElementById('mCat');
     catSel.innerHTML = CATEGORIES.map(c=>`<option value="${c.key}">${c.label}</option>`).join('');
 
@@ -539,23 +853,25 @@
     const $logout = document.getElementById('logout');
     const $btnProfile = document.getElementById('btnProfile');
     const $adminBadge = document.getElementById('adminBadge');
-    const $btnPendingOnly = document.getElementById('fltPending');
+    const $btnPendingOnly = document.getElementById('btnPendingOnly');
     const $btnAdminReport = document.getElementById('btnAdminReport');
     const $btnMsg = document.getElementById('btnMsg');
     const $msgBang = document.getElementById('msgBang');
     let me=null, isAdmin=false, unsubAdminDoc=null;
 
-    // 랭크 정의: Z → A (지수식 난이도), A 이후 + 최대 5, 초과시 ? 전환
+    // 랭크 정의
     const RANKS = 'ZYXWVUTSRQPONMLKJIHGFEDCBA'.split('');
-    const PIN_XP = 100, CMT_XP = 10;
-    const FIRST_PIN_AUTO_UP = true; // Z → Y 한 번에
-    function xpForRankIndex(i){ // i=0(Z)~25(A) 까지의 누적 필요치
+    const PIN_XP = 100, CMT_XP = 10, REPORT_APPROVED_XP = 110;
+    const FIRST_PIN_AUTO_UP = true;
+    
+    function xpForRankIndex(i){
       let req=0, step=100;
       for(let k=0;k<i;k++){ req += step; step*=2; }
       return req;
     }
+    
     function totalToRank(totalXP){
-      const aIdx = RANKS.length-1; // 25
+      const aIdx = RANKS.length-1;
       const aNeed = xpForRankIndex(aIdx);
       if (totalXP < aNeed){
         let idx=0;
@@ -576,13 +892,90 @@
       return { idx:aIdx, rank:'?', plus:999, cur:0, next:0, cap:true, q:true };
     }
 
-    async function awardXP(kind){
+    // ✅ 업적 정의
+    const ACHIEVEMENTS = [
+      {id:'pioneer', name:'개척자', desc:'핀을 처음으로 등록하세요', tier:'normal', xp:50, check:(p)=>p.pinsCreated>=1},
+      {id:'listener', name:'경청자', desc:'처음으로 반응을 추가해보세요', tier:'normal', xp:50, check:(p)=>p.reactionsGiven>=1},
+      {id:'questioner', name:'질문자', desc:'댓글을 처음으로 등록하세요', tier:'normal', xp:50, check:(p)=>p.commentsCreated>=1},
+      {id:'guardian', name:'정의의 수호자', desc:'신고가 처음으로 승인되어보세요', tier:'normal', xp:50, check:(p)=>p.reportsApproved>=1},
+      {id:'suggester', name:'제안자', desc:'처음으로 의견을 제출해보세요', tier:'rare', xp:150, check:(p)=>p.suggestionsMade>=1},
+      {id:'novice_explorer', name:'초보 탐험가', desc:'핀을 처음으로 비활성화 해보세요', tier:'normal', xp:50, check:(p)=>p.pinsConfirmed>=1},
+      {id:'veteran_explorer', name:'중견 탐험가', desc:'핀을 50개 이상 비활성화 하세요', tier:'epic', xp:500, check:(p)=>p.pinsConfirmed>=50},
+      {id:'legend_explorer', name:'전설의 탐험가', desc:'핀을 100개 이상 비활성화 하세요', tier:'legend', xp:2500, check:(p)=>p.pinsConfirmed>=100},
+      {id:'celebrity', name:'셀러브리티', desc:'반응을 받은 횟수가 1000회를 넘기세요', tier:'epic', xp:500, check:(p)=>p.reactionsReceived>=1000},
+      {id:'star', name:'연예인', desc:'총 조회수가 10000을 넘으세요', tier:'legend', xp:2500, check:(p)=>p.totalViews>=10000},
+    ];
+
+    // ✅ 미션 정의
+    const DAILY_MISSIONS = [
+      {id:'daily_login', name:'로그인하기', xp:20, check:(m)=>m.loginToday},
+      {id:'daily_comment', name:'댓글 1개 이상 달기', xp:20, check:(m)=>m.commentsToday>=1},
+      {id:'daily_notice', name:'공지 확인하기', xp:20, check:(m)=>m.noticeCheckedToday},
+      {id:'daily_complete', name:'일일미션 3개 하기', xp:40, check:(m)=>{
+        const completed = [m.loginToday, m.commentsToday>=1, m.noticeCheckedToday].filter(x=>x).length;
+        return completed>=3;
+      }},
+    ];
+
+    const WEEKLY_MISSIONS = [
+      {id:'weekly_login', name:'로그인 5회 이상 하기', xp:60, check:(m)=>m.loginDaysThisWeek>=5},
+      {id:'weekly_pin', name:'핀 1개 이상 등록하기', xp:60, check:(m)=>m.pinsThisWeek>=1},
+      {id:'weekly_suggest', name:'건의 및 문의 1회 이상 하기', xp:60, check:(m)=>m.suggestionsThisWeek>=1},
+      {id:'weekly_reactions', name:'핀 혹은 댓글에 반응 3회 이상 남기기', xp:60, check:(m)=>m.reactionsThisWeek>=3},
+      {id:'weekly_complete', name:'주간미션 3개 이상 하기', xp:120, check:(m)=>{
+        const completed = [
+          m.loginDaysThisWeek>=5,
+          m.pinsThisWeek>=1,
+          m.suggestionsThisWeek>=1,
+          m.reactionsThisWeek>=3
+        ].filter(x=>x).length;
+        return completed>=3;
+      }},
+    ];
+
+    async function checkAchievements(uid){
+      if (!firebaseOk || !uid) return;
+      const pfRef = doc(db,'profiles', uid);
+      const snap = await getDoc(pfRef);
+      if (!snap.exists()) return;
+      const profile = snap.data();
+      const unlocked = profile.achievementsUnlocked || [];
+      
+      for (const ach of ACHIEVEMENTS){
+        if (unlocked.includes(ach.id)) continue;
+        if (ach.check(profile)){
+          await updateDoc(pfRef, {
+            achievementsUnlocked: arrayUnion(ach.id),
+            xp: increment(ach.xp)
+          });
+          showAchievementPopup(ach);
+        }
+      }
+    }
+
+    function showAchievementPopup(ach){
+      const tierLabels = {normal:'노말', rare:'레어', epic:'에픽', legend:'레전드'};
+      const popup = document.createElement('div');
+      popup.className = 'achievement-popup';
+      popup.innerHTML = `
+        <h3>🎉 업적 달성!</h3>
+        <div class="achievement-badge ${ach.tier}">${ach.name}</div>
+        <p style="margin:8px 0">${ach.desc}</p>
+        <p style="font-size:12px; opacity:.8">${tierLabels[ach.tier]} 업적 · +${ach.xp} XP</p>
+      `;
+      document.body.appendChild(popup);
+      setTimeout(()=>popup.remove(), 4000);
+    }
+
+    async function awardXP(kind, customAmount){
       if (!firebaseOk || !me) return;
       const pfRef = doc(db,'profiles', me.uid);
       const snap = await getDoc(pfRef);
       const data = snap.exists()? (snap.data()||{}) : {};
       let xp = data.xp||0;
-      xp += (kind==='pin'? PIN_XP : CMT_XP);
+      const amount = customAmount !== undefined ? customAmount : (kind==='pin'? PIN_XP : CMT_XP);
+      xp += amount;
+      
       let firstPinBoon=false;
       if (kind==='pin' && FIRST_PIN_AUTO_UP && (data.rankCode||'Z')==='Z' && !(data.pinnedOnce)){
         firstPinBoon = true;
@@ -590,6 +983,7 @@
       const calc = totalToRank(xp);
       let rankCode = calc.rank;
       if (firstPinBoon) { rankCode = 'Y'; }
+      
       await setDoc(pfRef, {
         uid: me.uid,
         nick: data.nick || (me.displayName||'익명'),
@@ -598,11 +992,32 @@
         pinnedOnce: data.pinnedOnce || (kind==='pin')
       }, { merge:true });
 
-      if (calc.q){ alert('경고: 경험치를 더 쌓아도 랭크가 변하지 않습니다! (A+++++ 초과 → ?)'); }
+      if (calc.q && typeof toast === 'function'){
+        toast('경고: A+++++ 초과 시 랭크 표기가 ? 로 표시됩니다');
+      }
+
+      
+      await checkAchievements(me.uid);
     }
 
-    function nameWithRank(nick, rankCode, isAdminFlag){
-      return `${nick||'익명'} • ${isAdminFlag ? '¿' : (rankCode||'Z')}`;
+    // ✅ 신뢰도 관리
+    async function addTrust(uid, amount, reason){
+      if (!firebaseOk || !uid) return;
+      const pfRef = doc(db,'profiles', uid);
+      const snap = await getDoc(pfRef);
+      const data = snap.exists() ? (snap.data()||{}) : {};
+      const currentTrust = data.trust || 10;
+      const newTrust = Math.max(-999, Math.min(100, currentTrust + amount));
+      
+      await setDoc(pfRef, { trust: newTrust }, { merge:true });
+      await addDoc(collection(db,'profiles', uid, 'trustHistory'), {
+        amount, reason, timestamp: serverTimestamp(), newTotal: newTrust
+      });
+    }
+
+    function nameWithRank(nick, rankCode, trust, isAdminFlag){
+      const trustStr = trust !== undefined ? ` • 신뢰도: ${trust >= 0 ? trust : `<span class="trust-negative">${trust}</span>`}` : '';
+      return `${nick||'익명'} • ${isAdminFlag ? '관리자' : (rankCode||'Z')}${trustStr}`;
     }
 
     async function ensureProfileOnLogin(){
@@ -617,11 +1032,15 @@
           nick: me.displayName || '익명',
           xp: 0,
           rankCode: 'Z',
-          createdAt: serverTimestamp()
+          trust: 10,
+          createdAt: serverTimestamp(),
+          pinsCreated:0, commentsCreated:0, reactionsGiven:0, reactionsReceived:0,
+          reportsApproved:0, suggestionsMade:0, pinsConfirmed:0, totalViews:0,
+          achievementsUnlocked:[], achievementsDisplayed:[]
         }, { merge:true });
       } else {
         const data = snap.data()||{};
-        $who.innerHTML = `${esc(nameWithRank(data.nick, data.rankCode, isAdmin))}`;
+        $who.textContent = nameWithRank(data.nick, data.rankCode, data.trust, isAdmin);
       }
     }
 
@@ -637,6 +1056,7 @@
     if (firebaseOk) getRedirectResult(auth).catch(()=>{});
 
     function applyAdminUI() {
+      // ✅ 관리자 랭크는 "관리자"로 표시
       $adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
       $btnPendingOnly.style.display = isAdmin ? 'inline-block' : 'none';
       $btnAdminReport.style.display = isAdmin ? 'inline-block' : 'none';
@@ -654,49 +1074,114 @@
 
     if (firebaseOk){
       onAuthStateChanged(auth, async (user)=>{
-        me=user||null;
+        me = user || null;
         $btnProfile.style.display = me ? 'inline-block' : 'none';
-        document.getElementById('login').style.display=me?'none':'inline-block';
-        document.getElementById('logout').style.display=me?'inline-block':'none';
-        $who.textContent=me?(me.displayName || '로그인됨'):'로그인 안 됨';
+        document.getElementById('btnAchievementList')?.remove();
+        document.getElementById('login').style.display  = me ? 'none' : 'inline-block';
+        document.getElementById('logout').style.display = me ? 'inline-block' : 'none';
+        $who.textContent = me ? (me.displayName || '로그인됨') : '로그인 안 됨';
 
-        try { if (unsubAdminDoc) { unsubAdminDoc(); } } catch {}
+        // ── 기존 구독 정리 및 기본값 초기화
+        try { if (unsubAdminDoc) { unsubAdminDoc(); unsubAdminDoc = null; } } catch {}
         isAdmin = false;
         applyAdminUI();
 
-        if (me){
-          try{
-            const r = doc(db,'admins', me.uid);
-            unsubAdminDoc = onSnapshot(r, s=>{
-              isAdmin = s.exists();
-              applyAdminUI();
-              ensureProfileOnLogin();
-              refreshTopName();
-            }, _=>{ isAdmin=false; applyAdminUI(); refreshTopName(); });
-          }catch(e){
-            isAdmin=false; applyAdminUI(); refreshTopName();
+        // me가 있으면 관리자 문서 구독 시작
+        if (me) {
+          try {
+           const r = doc(db, 'admins', me.uid);
+            unsubAdminDoc = onSnapshot(
+              r,
+              (s) => {
+                const prev = isAdmin;
+                const d = s.exists() ? (s.data() || {}) : null;
+                // enabled 가 false가 아니면 관리자
+                isAdmin = !!(d && (d.enabled !== false));
+                if (isAdmin !== prev) applyAdminUI();
+                ensureProfileOnLogin();
+                  refreshTopName();
+              },
+             (err) => {
+                console.warn('[admins] subscribe failed', err);
+               isAdmin = false;
+               applyAdminUI();
+                refreshTopName();
+             }
+           );
+          } catch (e) {
+            console.warn('[admins] subscribe init error', e);
+            isAdmin = false;
+            applyAdminUI();
+            refreshTopName();
           }
         } else {
+          // 로그아웃 시 초기화
+          isAdmin = false;
+         applyAdminUI();
           refreshTopName();
         }
-      });
+      }); // ← 여기서 끝나야 함 (추가 } 제거)
+
+    }
+    async function recordDailyLogin(){
+      if (!firebaseOk || !me) return;
+      const today = new Date().toISOString().split('T')[0];
+      const mRef = doc(db,'profiles', me.uid, 'missions', 'daily');
+      const snap = await getDoc(mRef);
+      const data = snap.exists() ? snap.data() : {};
+      
+      if (data.lastLoginDate !== today){
+        await setDoc(mRef, {
+          loginToday: true,
+          lastLoginDate: today
+        }, {merge:true});
+      }
+      
+      // 주간 로그인 기록
+      const weekNum = getWeekNumber(new Date());
+      const wRef = doc(db,'profiles', me.uid, 'missions', 'weekly');
+      const wSnap = await getDoc(wRef);
+      const wData = wSnap.exists() ? wSnap.data() : {};
+      
+      if (wData.currentWeek !== weekNum){
+        await setDoc(wRef, {
+          currentWeek: weekNum,
+          loginDaysThisWeek: 1,
+          loginDates: [today]
+        }, {merge:true});
+      } else {
+        const dates = wData.loginDates || [];
+        if (!dates.includes(today)){
+          await updateDoc(wRef, {
+            loginDaysThisWeek: increment(1),
+            loginDates: arrayUnion(today)
+          });
+        }
+      }
+    }
+
+    function getWeekNumber(d){
+      const onejan = new Date(d.getFullYear(),0,1);
+      return Math.ceil((((d - onejan) / 86400000) + onejan.getDay()+1)/7);
     }
 
     async function refreshTopName(){
       if (!firebaseOk || !me){
-        $who.textContent = '로그인 안 됨';
+       $who.textContent = '로그인 안 됨';
         return;
       }
       try{
         const pf = await getDoc(doc(db,'profiles', me.uid));
         const d = pf.exists()? (pf.data()||{}) : null;
         const nick = d?.nick || (me.displayName||'익명');
-        const rank = d?.rankCode || 'Z';
-        $who.innerHTML = `${esc(nameWithRank(nick, rank, isAdmin))}`;
+        const rankCode = isAdmin ? '관리자' : (d?.rankCode || 'Z');
+        const trust = (d?.trust !== undefined) ? d.trust : 10;
+        $who.textContent = nameWithRank(nick, rankCode, trust, isAdmin);
       }catch{
         $who.textContent = me.displayName || '로그인됨';
       }
     }
+
 
     /* ---------------- 아이콘 캐시 ---------------- */
     const iconCache = new Map();
@@ -708,19 +1193,23 @@
       return iconCache.get(key);
     }
 
-    /* ---------------- 카테고리 그룹 & 토글 ---------------- */
+    /* ---------------- 카테고리 그룹 & 토글 + 진행도 ---------------- */
     const catGroups = new Map();
     const catVisible = new Map(CATEGORIES.map(c => [c.key, true]));
+    const catConfirmed = new Map(); // ✅ 카테고리별 확인된 핀 추적
+    
     const savedCatVis = LS.load('catVisible', null);
     if (savedCatVis && typeof savedCatVis==='object'){
       for (const [k,v] of Object.entries(savedCatVis)){ catVisible.set(k, !!v); }
     }
+    
     function ensureCatGroup(key){
       if (!catGroups.has(key)) {
         catGroups.set(key, L.layerGroup().addTo(map));
       }
       return catGroups.get(key);
     }
+    
     function setCategoryVisible(key, visible){
       catVisible.set(key, visible);
       LS.save('catVisible', Object.fromEntries(catVisible));
@@ -728,10 +1217,31 @@
       if (visible) { if (!map.hasLayer(g)) g.addTo(map); }
       else { if (map.hasLayer(g)) map.removeLayer(g); }
       const btn = document.querySelector(`.flt[data-cat="${CSS.escape(key)}"]`);
-      if (btn){ btn.classList.toggle('on', visible); }
+      if (btn){ 
+        btn.classList.toggle('on', visible);
+        updateCategoryProgress(key);
+      }
       applyAllVisibility();
       recomputeSeqs();
     }
+    
+    function updateCategoryProgress(catKey){
+      const btn = document.querySelector(`.flt[data-cat="${CSS.escape(catKey)}"]`);
+      if (!btn) return;
+      
+      const total = [...markerMap.values()].filter(r=>r.data.category===catKey && r.data.status==='approved').length;
+      const confirmed = catConfirmed.get(catKey) || 0;
+      const percent = total > 0 ? Math.round((confirmed/total)*100) : 0;
+      
+      let progressEl = btn.querySelector('.progress');
+      if (!progressEl){
+        progressEl = document.createElement('div');
+        progressEl.className = 'progress';
+        btn.appendChild(progressEl);
+      }
+      progressEl.textContent = `${percent}%`;
+    }
+    
     function setAllCats(v){ CATEGORIES.forEach(c=> setCategoryVisible(c.key, v)); }
     function setOnlyPokemonCats(){
       setAllCats(false);
@@ -753,6 +1263,7 @@
     const fltList = document.getElementById('fltList');
     const repSortBar = document.getElementById('repSortBar');
     const repFiltBar = document.getElementById('repFiltBar');
+    const warningUserList = document.getElementById('warningUserList');
     let repSortMode = 'mix';
     let repFilterMode = 'all';
 
@@ -770,7 +1281,7 @@
     };
 
     function buildFilters(){
-      fltList.innerHTML = CATEGORIES.map(c=>`<button class="flt ${catVisible.get(c.key)!==false?'on':''}" data-cat="${c.key}">${c.label}</button>`).join('');
+      fltList.innerHTML = CATEGORIES.map(c=>`<button class="flt ${catVisible.get(c.key)!==false?'on':''}" data-cat="${c.key}">${c.label}<div class="progress">0%</div></button>`).join('');
       fltList.onclick = (e)=>{
         const b = e.target.closest('.flt[data-cat]');
         if (!b) return;
@@ -805,6 +1316,42 @@
       document.getElementById('btnAdminReport').classList.toggle('on', adminReportMode);
       applyAllVisibility();
       recomputeSeqs();
+      if (adminReportMode) updateWarningUsers();
+    }
+
+    // ✅ 요주의 유저 표시
+    async function updateWarningUsers(){
+      if (!firebaseOk || !isAdmin) return;
+      const profiles = await getDocs(collection(db,'profiles'));
+      const warning = [];
+      
+      for (const p of profiles.docs){
+        const data = p.data();
+        const uid = p.id;
+        
+        // 신고 반려 10회 이상
+        const rejectCount = data.reportsRejected || 0;
+        if (rejectCount >= 10){
+          warning.push({uid, nick:data.nick||'익명', reason:`신고 반려 ${rejectCount}회`});
+        }
+        
+        // 신고 승인/삭제된 핀/댓글 10개 이상
+        const badContent = (data.pinsDeleted||0) + (data.commentsDeleted||0);
+        if (badContent >= 10){
+          warning.push({uid, nick:data.nick||'익명', reason:`삭제된 콘텐츠 ${badContent}개`});
+        }
+      }
+      
+      if (warning.length === 0){
+        warningUserList.innerHTML = '<div style="opacity:.7">없음</div>';
+      } else {
+        warningUserList.innerHTML = warning.map(w=>`
+          <div style="background:#2a2a2a; padding:6px; margin:4px 0; border-radius:6px">
+            ${esc(w.nick)} (${w.uid.slice(0,8)}…)<br>
+            <span style="opacity:.8">${esc(w.reason)}</span>
+          </div>
+        `).join('');
+      }
     }
 
     /* ---------------- 통합 검색 ---------------- */
@@ -867,7 +1414,7 @@
     };
     refreshTrending(); setInterval(refreshTrending, 3600*1000);
 
-    /* ---------------- 신고: 정책/프록시 (원본 유지) ---------------- */
+    /* ---------------- 신고: 정책/프록시 ---------------- */
     let reportedComments = [];
     let unsubRepComments = null;
 
@@ -889,8 +1436,11 @@
     function sortReported(a,b){
       if (b.count!==a.count) return b.count - a.count;
       if (b.remainMs!==a.remainMs) return b.remainMs - a.remainMs;
-      return a.firstReportAt - b.firstReportAt;
+      if ((a.hidden?1:0)!==(b.hidden?1:0)) return (b.hidden?1:0)-(a.hidden?1:0);
+      return (a.firstReportAt||0) - (b.firstReportAt||0);
     }
+
+
 
     async function ensureCommentHidePolicy(markerId, commentId){
       try{
@@ -943,7 +1493,9 @@
     async function subscribeReportedCommentsAdmin(){
       if (unsubRepComments){unsubRepComments();unsubRepComments=null;}
       if (!firebaseOk || !isAdmin){
-        reportedComments = []; renderReportedComments(); return;
+        reportedComments = [];
+        renderReportedComments();
+        return;
       }
       const stops = [];
 
@@ -1077,6 +1629,13 @@
 
         if (e.target.matches('[data-dismiss]')){
           try{
+            // ✅ 신고자에게 신뢰도 +15
+            const reports = await getDocs(query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending')));
+            for (const r of reports.docs){
+              const reporterUid = r.data().uid;
+              if (reporterUid) await addTrust(reporterUid, 15, '신고 반려');
+            }
+            
             if (proxyId){
               await deleteDoc(doc(db,'adminReports', proxyId));
             } else {
@@ -1084,19 +1643,21 @@
                 const q = query(collection(db,'adminReports'), where('markerId','==', markerId), where('commentId','==', commentId));
                 const s = await getDocs(q);
                 await Promise.all(s.docs.map(d=> deleteDoc(d.ref)));
-              }catch(_e){}
+              }catch(e){ console.warn('reject pending reports failed', e); }
             }
             try{
               const q = query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending'));
               const s = await getDocs(q);
               await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
-            }catch(_e){}
+            }catch(e){ console.warn('reject pending reports failed', e); }
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), {
               hiddenUntil: null,
               reportPendingCount: 0,
               reportsBlocked: true
             });
             try{ await updateDoc(doc(db,'markers', markerId), { reportPendingCount: 0 }); }catch(_e){}
+            
+            // ✅ 작성자 신뢰도 증가 없음 (반려 시 신뢰도 변화 없음)
             alert('신고 반려 완료 — 원본 댓글의 신고 카운트/뱃지를 제거하고 추가 신고를 차단했습니다.');
           }catch(err){
             alert('반려 처리 실패: ' + (err?.message||err));
@@ -1106,6 +1667,28 @@
         if (e.target.matches('[data-delete]')){
           if (!confirm('관리자 권한으로 원본 댓글을 삭제하시겠습니까?')) return;
           try{
+            const cSnap = await getDoc(doc(db,'markers', markerId, 'comments', commentId));
+            const authorUid = cSnap.data()?.uid;
+            
+            // ✅ 신고 승인: 신고자에게 110 XP, 작성자 신뢰도 -10
+            const reports = await getDocs(query(collection(db,'markers', markerId, 'comments', commentId, 'reports'), where('status','==','pending')));
+            for (const r of reports.docs){
+              const reporterUid = r.data().uid;
+              if (reporterUid){
+                const pfRef = doc(db,'profiles', reporterUid);
+                await setDoc(pfRef, { 
+                  xp: increment(REPORT_APPROVED_XP),
+                reportsApproved: increment(1)
+                }, { merge:true });
+                await checkAchievements(reporterUid);
+              }
+            }
+            
+            if (authorUid){
+              await addTrust(authorUid, -10, '댓글 삭제됨 (신고 승인)');
+              await safeMergeDoc(['profiles', authorUid], { commentsDeleted: increment(1) });
+            }
+            
             await updateDoc(doc(db,'markers', markerId, 'comments', commentId), { deleted:true });
             if (proxyId) await deleteDoc(doc(db,'adminReports', proxyId));
             else {
@@ -1121,9 +1704,20 @@
       };
     }
 
-    /* ---------------- 마커 구독/렌더 ---------------- */
+    /* ---------------- 마커 구독/렌더 + 조회수 ---------------- */
     const markerMap=new Map();
     let unsubMain=null, unsubPending=null;
+
+    async function incrementViewCount(markerId){
+      if (!firebaseOk) return;
+      try{
+        await updateDoc(doc(db,'markers', markerId), {
+          viewCount: increment(1)
+        });
+      }catch(e){
+        console.warn('[viewCount] increment failed', e);
+      }
+    }
 
     function subscribeMarkers(){
       if (!firebaseOk) return;
@@ -1135,7 +1729,8 @@
       unsubMain=onSnapshot(qApproved, s=>{
         s.docChanges().forEach(renderChange);
         recomputeSeqs();
-        tryOpenDeepLink(); // ✅ 데이터 도착 후 한 번 시도
+        updateAllCategoryProgress();
+        tryOpenDeepLink();
       });
 
       if (isAdmin){
@@ -1143,9 +1738,14 @@
         unsubPending=onSnapshot(qPending, s=>{
           s.docChanges().forEach(renderChange);
           recomputeSeqs();
+          updateAllCategoryProgress();
           tryOpenDeepLink();
         });
       }
+    }
+
+    function updateAllCategoryProgress(){
+      CATEGORIES.forEach(c=> updateCategoryProgress(c.key));
     }
 
     function renderChange(ch){
@@ -1166,14 +1766,22 @@
       const group = ensureCatGroup(m.category);
       const mk=L.marker([m.y, m.x], { icon: iconFor(m.category) }).addTo(group);
       mk.on('click', ()=>openInfoWithSeq(m));
-      markerMap.set(id, {group, marker: mk, data:m, seq:null});
+      markerMap.set(id, {group, marker: mk, data:m, seq:null, confirmed: LS.load(`pin_confirmed_${id}`, false)});
       applyVisibility(id);
     }
 
     function isHiddenByReport(m){ return toMs(m.hiddenUntil) > nowMs(); }
+    
     function applyVisibility(id){
       const rec = markerMap.get(id); if (!rec) return;
-      const {group, marker, data:m} = rec;
+      const {group, marker, data:m, confirmed} = rec;
+
+      // ✅ 확인된 핀은 반투명 표시
+      if (confirmed){
+        marker.setOpacity(0.4);
+      } else {
+        marker.setOpacity(1);
+      }
 
       if (adminReportMode){
         const ok = isHiddenByReport(m);
@@ -1191,6 +1799,7 @@
       if (ok){ if (!group.hasLayer(marker)) marker.addTo(group); }
       else   { if (group.hasLayer(marker)) group.removeLayer(marker); }
     }
+    
     function applyAllVisibility(){ markerMap.forEach((_, id)=> applyVisibility(id)); }
 
     setInterval(()=> { applyAllVisibility(); recomputeSeqs(); }, 60*1000);
@@ -1210,6 +1819,9 @@
       if (!cs.exists()){ alert('댓글이 삭제되었습니다.'); return; }
       const cd = cs.data()||{};
       if (cd.reportsBlocked){ alert('관리자에 의해 이 댓글은 신고가 차단되었습니다.'); return; }
+
+      // ✅ 신고 접수 시 신뢰도 -10
+      if (me?.uid) await addTrust(me.uid, -10, '댓글 신고 접수');
 
       await addDoc(collection(db,'markers', markerId, 'comments', commentId, 'reports'), {
         type:'comment', markerId, commentId, uid: me?.uid||null, reason,
@@ -1244,6 +1856,9 @@
       const ms = await getDoc(mref);
       const md = ms.data()||{};
       if (md.reportsBlocked){ alert('관리자에 의해 이 핀은 신고가 차단되었습니다.'); return {ok:false, hid:false}; }
+
+      // ✅ 신고 접수 시 신뢰도 -10
+      if (me?.uid) await addTrust(me.uid, -10, '핀 신고 접수');
 
       try{
         await addDoc(collection(db,'markers', m.id, 'reports'), {
@@ -1292,7 +1907,7 @@
           items.push({ id, created });
         }
       });
-      items.sort((a,b)=> (a.created||0) - (b.created||0));
+      items.sort((a,b)=> ((a.created || a._localCreatedAt || 0) - (b.created || b._localCreatedAt || 0)));
       const seqById = new Map();
       for (let i=0;i<items.length;i++) seqById.set(items[i].id, i+1);
 
@@ -1301,6 +1916,119 @@
         const rec = markerMap.get(currentOpenId);
         document.getElementById('infoId').textContent = rec.seq ? '#'+rec.seq : '#-';
       }
+    }
+
+    /* ---------------- 반응 시스템 ---------------- */
+    const reactionMenu = document.getElementById('reactionMenu');
+    let currentReactionTarget = null;
+
+    function showReactionMenu(x, y, type, targetId, parentId){
+      currentReactionTarget = {type, targetId, parentId};
+      reactionMenu.style.left = x + 'px';
+      reactionMenu.style.top = y + 'px';
+      reactionMenu.style.display = 'block';
+    }
+    globalThis.showReactionMenu = showReactionMenu;
+
+
+    function hideReactionMenu(){
+      reactionMenu.style.display = 'none';
+      currentReactionTarget = null;
+    }
+
+    document.addEventListener('click', (e)=>{
+      if (!reactionMenu.contains(e.target)) hideReactionMenu();
+    });
+
+    reactionMenu.onclick = async (e)=>{
+      const btn = e.target.closest('[data-emoji]');
+      if (!btn || !currentReactionTarget) return;
+      const emoji = btn.getAttribute('data-emoji');
+      const {type, targetId, parentId} = currentReactionTarget;
+      
+      if (!me){
+        alert('로그인이 필요합니다');
+        hideReactionMenu();
+        return;
+      }
+
+      try{
+        if (type === 'pin'){
+          const rRef = doc(db,'markers', targetId, 'reactions', me.uid);
+          await setDoc(rRef, { emoji, uid: me.uid, createdAt: serverTimestamp() });
+          
+          // 반응 받은 사람 통계 업데이트
+          const pinSnap = await getDoc(doc(db,'markers', targetId));
+          const authorUid = pinSnap.data()?.authorUid;
+          if (authorUid){
+            await safeMergeDoc(['profiles', authorUid], { reactionsReceived: increment(1) });
+          }
+        } else if (type === 'comment'){
+          const rRef = doc(db,'markers', parentId, 'comments', targetId, 'reactions', me.uid);
+          await setDoc(rRef, { emoji, uid: me.uid, createdAt: serverTimestamp() });
+          
+          // 반응 받은 사람 통계 업데이트
+          const cmtSnap = await getDoc(doc(db,'markers', parentId, 'comments', targetId));
+          const authorUid = cmtSnap.data()?.uid;
+          if (authorUid){
+            await safeMergeDoc(['profiles', authorUid], { reactionsReceived: increment(1) });
+          }
+        }
+        
+        // 반응 준 사람 통계 업데이트
+        await updateDoc(doc(db,'profiles', me.uid), {
+          reactionsGiven: increment(1)
+        });
+        
+        // 일일 미션 체크
+        const mRef = doc(db,'profiles', me.uid, 'missions', 'daily');
+        await setDoc(mRef, {
+          reactionsToday: increment(1)
+        }, {merge:true});
+        
+        // 주간 미션 체크
+        const weekNum = getWeekNumber(new Date());
+        const wRef = doc(db,'profiles', me.uid, 'missions', 'weekly');
+        await setDoc(wRef, {
+          currentWeek: weekNum,
+          reactionsThisWeek: increment(1)
+        }, {merge:true});
+        
+        await checkAchievements(me.uid);
+        hideReactionMenu();
+        
+        // 화면 새로고침
+        if (currentOpenId) openInfoWithSeq(markerMap.get(currentOpenId).data);
+      }catch(err){
+        alert('반응 추가 실패: ' + (err?.message||err));
+        hideReactionMenu();
+      }
+    };
+
+    async function loadReactions(type, targetId, parentId){
+      if (!firebaseOk) return {};
+      try{
+        let rCol;
+        if (type === 'pin'){
+          rCol = collection(db,'markers', targetId, 'reactions');
+        } else {
+          rCol = collection(db,'markers', parentId, 'comments', targetId, 'reactions');
+        }
+        const snap = await getDocs(rCol);
+        const counts = {};
+        snap.forEach(d=>{
+          const emoji = d.data().emoji;
+          counts[emoji] = (counts[emoji]||0) + 1;
+        });
+        return counts;
+      }catch{
+        return {};
+      }
+    }
+
+    function renderReactions(counts){
+      if (!counts || Object.keys(counts).length === 0) return '';
+      return Object.entries(counts).map(([emoji, count])=>`<span>${emoji} ${count}</span>`).join('');
     }
 
     /* ---------------- 상세 패널 + 캐러셀 + 댓글 ---------------- */
@@ -1313,6 +2041,9 @@
     const $infoBtns=document.getElementById('infoBtns');
     const $infoPk=document.getElementById('infoPk');
     const $copyLinkBtn=document.getElementById('copyLinkBtn');
+    const $btnConfirm=document.getElementById('btnConfirm');
+    const $pinViewCount=document.getElementById('pinViewCount');
+    const $pinReactions=document.getElementById('pinReactions');
 
     const $carousel=document.getElementById('infoCarousel');
     const $carInner=document.getElementById('carInner');
@@ -1320,26 +2051,65 @@
     const $carNext=document.getElementById('carNext');
     const $carDots=document.getElementById('carDots');
     let carIdx = 0, carItems = [];
+    
     function buildCarousel(media){
       const rest = (media||[]).slice(1);
       if (!rest.length){ $carousel.style.display='none'; return; }
       $carousel.style.display='block';
       carItems = rest; carIdx = 0;
-      $carInner.innerHTML = rest.map(m=>`<div class="item">${ m.type==='video' ? `<video controls src="${m.url}"></video>` : `<img src="${m.url}" alt="">` }</div>`).join('');
+      $carInner.innerHTML = rest.map(m=>`
+        <div class="item">
+      ${ m.type==='video'
+        ? `<video controls src="${m.url}" preload="metadata"></video>`
+        : `<img src="${m.url}" loading="lazy" referrerpolicy="no-referrer" alt="">`
+      }
+         </div>`).join('');
       $carDots.innerHTML = rest.map((_,i)=>`<div class="dot ${i===0?'on':''}" data-i="${i}"></div>`).join('');
       updateCarousel();
+      $carPrev.setAttribute('aria-controls','carInner');
+      $carNext.setAttribute('aria-controls','carInner');
+      $carInner.setAttribute('aria-live','polite');
+
     }
+    
     function updateCarousel(){
       const w = $carousel.clientWidth || 1;
       $carInner.style.transform = `translateX(${-carIdx * w}px)`;
       [...$carDots.children].forEach((d,i)=> d.classList.toggle('on', i===carIdx));
     }
+    
     window.addEventListener('resize', updateCarousel);
     $carPrev.onclick = ()=>{ if (carItems.length){ carIdx = (carIdx - 1 + carItems.length) % carItems.length; updateCarousel(); } };
     $carNext.onclick = ()=>{ if (carItems.length){ carIdx = (carIdx + 1) % carItems.length; updateCarousel(); } };
     $carDots.onclick = (e)=>{ const d = e.target.closest('.dot'); if (!d) return; carIdx = +d.getAttribute('data-i') || 0; updateCarousel(); };
 
-    // ===== 댓글 =====
+    // ✅ 확인 버튼
+    $btnConfirm.onclick = ()=>{
+      if (!currentOpenId) return;
+      const rec = markerMap.get(currentOpenId);
+      if (!rec) return;
+      
+      rec.confirmed = !rec.confirmed;
+      LS.save(`pin_confirmed_${currentOpenId}`, rec.confirmed);
+      
+      // 카테고리 진행도 업데이트
+      const cat = rec.data.category;
+      if (!catConfirmed.has(cat)) catConfirmed.set(cat, 0);
+      catConfirmed.set(cat, catConfirmed.get(cat) + (rec.confirmed ? 1 : -1));
+      updateCategoryProgress(cat);
+      
+      // 업적 체크
+      if (rec.confirmed && me){
+        updateDoc(doc(db,'profiles', me.uid), {
+          pinsConfirmed: increment(1)
+        }).then(()=> checkAchievements(me.uid));
+      }
+      
+      applyVisibility(currentOpenId);
+      $btnConfirm.textContent = rec.confirmed ? '✓ 확인됨' : '✓ 확인';
+    };
+
+    // 댓글
     const $cForm = document.getElementById('cForm');
     const $cBody = document.getElementById('cBody');
     const $cSubmit = document.getElementById('cSubmit');
@@ -1347,18 +2117,22 @@
     let unsubComments = null;
 
     async function getDisplayForUid(uid){
-      if (!firebaseOk || !uid) return {nick:'익명', rankCode:'Z', isAdmin:false};
+      if (!firebaseOk || !uid) return {nick:'익명', rankCode:'Z', trust:10, isAdmin:false};
       const [pf, ad] = await Promise.all([
         getDoc(doc(db,'profiles', uid)).catch(()=>null),
         getDoc(doc(db,'admins', uid)).catch(()=>null)
       ]);
       const isAdm = ad && ad.exists();
       const nick = (pf && pf.exists() && (pf.data()?.nick)) || '익명';
-      const rank = (pf && pf.exists() && (pf.data()?.rankCode)) || 'Z';
-      return { nick, rankCode:rank, isAdmin:isAdm };
+      const rank = isAdm ? '관리자' : ((pf && pf.exists() && (pf.data()?.rankCode)) || 'Z');
+      const trust = (pf && pf.exists() && (pf.data()?.trust !== undefined)) ? pf.data().trust : 10;
+      return { nick, rankCode:rank, trust, isAdmin:isAdm };
     }
 
-    function fmtDisplay(nick, rankCode, adm){ return nameWithRank(nick, rankCode, adm); }
+    function fmtDisplay(nick, rankCode, trust, adm){
+      const trustClass = trust < 0 ? 'trust-negative' : 'trust-positive';
+      return `${nick} • ${adm ? '관리자' : rankCode} • 신뢰도: <span class="${trustClass}">${trust}</span>`;
+    }
 
     function openComments(marker){
       if (!firebaseOk) { $cForm.style.display='none'; $cList.innerHTML=''; return; }
@@ -1386,22 +2160,29 @@
             }
           }catch(_e){}
           const disp = await getDisplayForUid(c.uid);
-          return { ...c, _repCnt: cnt, _disp: disp };
+          const reactions = await loadReactions('comment', c.id, marker.id);
+          return { ...c, _repCnt: cnt, _disp: disp, _reactions: reactions };
         }));
 
         $cList.innerHTML = items.map(c => `
-          <div class="citem" id="c-${c.id}">
+          <div class="citem ${c._hidden?'inactive':''}" id="c-${c.id}" oncontextmenu="event.preventDefault(); showReactionMenu(event.pageX, event.pageY, 'comment', '${c.id}', '${marker.id}'); return false;">
             <div class="meta">
-              ${esc(fmtDisplay(c._disp.nick, c._disp.rankCode, c._disp.isAdmin))} · ${new Date(toMs(c.createdAt||Date.now())).toLocaleString()}
+              <span class="clickable" data-uid="${c.uid}">${fmtDisplay(c._disp.nick, c._disp.rankCode, c._disp.trust, c._disp.isAdmin)}</span> · ${new Date(toMs(c.createdAt||Date.now())).toLocaleString()}
               ${c._repCnt>0 ? `<span class="badge-report">신고 ${c._repCnt}</span>`:''}
               ${c._hidden ? `<span class="badge-hidden">가림중</span>`:''}
             </div>
             <div class="body" style="white-space:pre-wrap; margin-top:6px">${esc(c.body||'')}</div>
+            <div class="reactions">${renderReactions(c._reactions)}</div>
             <div class="act">
               <button class="btn" data-crep="${c.id}">신고</button>
               ${(isAdmin || me?.uid===c.uid) ? `<button class="btn warn" data-cdel="${c.id}">삭제</button>`:''}
             </div>
           </div>`).join('');
+
+        // 유저 프로필 클릭 이벤트
+        $cList.querySelectorAll('[data-uid]').forEach(el=>{
+          el.onclick = ()=> openOtherProfile(el.getAttribute('data-uid'));
+        });
 
         $cList.querySelectorAll('[data-crep]').forEach(btn=>{
           btn.onclick = async ()=>{
@@ -1432,7 +2213,24 @@
           reportPendingCount: 0, reportsBlocked: false
         });
         $cBody.value='';
+        
+        // ✅ 신뢰도 +5
+        await addTrust(me.uid, 5, '댓글 작성');
+        
+        // ✅ 통계 업데이트
+        await safeMergeDoc(['profiles', me.uid], { commentsCreated: increment(1) });
+
+        
+        // ✅ 일일 미션 체크
+        const today = new Date().toISOString().split('T')[0];
+        const mRef = doc(db,'profiles', me.uid, 'missions', 'daily');
+        await setDoc(mRef, {
+          commentsToday: increment(1),
+          lastCommentDate: today
+        }, {merge:true});
+        
         await awardXP('comment');
+        await checkAchievements(me.uid);
       };
     }
 
@@ -1440,8 +2238,8 @@
       if (!m.media?.length) return '';
       const first=m.media[0];
       return (first.type==='video')
-        ? `<video class="thumb" controls src="${first.url}"></video>`
-        : `<img class="thumb" src="${first.url}" alt="thumb">`;
+        ? `<video class="thumb" controls src="${first.url}" preload="metadata"></video>`
+        : `<img class="thumb" src="${first.url}" loading="lazy" referrerpolicy="no-referrer" alt="thumb">`;
     }
 
     async function fetchMarkerPendingCount(markerId){
@@ -1462,55 +2260,62 @@
       openInfo(m, seqNum);
     }
 
-    async function adminEditOrDelete(marker){
-      const choice = prompt('관리자 작업을 선택하세요: edit / delete', 'edit');
-      if (!choice) return;
-      if (choice.toLowerCase()==='delete'){
-        if (!confirm('이 핀을 완전히 삭제할까요?')) return;
-        await deleteDoc(doc(db,'markers', marker.id));
-        $info.style.display='none'; currentOpenId=null;
-        return;
-      }
-      if (choice.toLowerCase()==='edit'){
-        const newTitle = prompt('제목 수정', marker.title||'');
-        if (newTitle===null) return;
-        const newBody  = prompt('내용 수정', marker.body||'');
-        if (newBody===null) return;
-        try{
-          await updateDoc(doc(db,'markers', marker.id), { title:newTitle, body:newBody });
-          alert('수정되었습니다.');
-        }catch(e){
-          alert('수정 실패: ' + (e?.message||e));
-        }
-      }
-    }
-
     async function openInfo(m, seqNum){
       currentOpenId=m.id;
+      
+      // ✅ 조회수 증가
+      await incrementViewCount(m.id);
+      
+      // ✅ 작성자의 총 조회수 업데이트
+      if (m.authorUid){
+        await safeMergeDoc(['profiles', m.authorUid], { totalViews: increment(1) });
+      }
+      
       $infoTitle.textContent=m.title||'(제목 없음)';
       $infoId.textContent = seqNum ? '#'+seqNum : '#-';
       const statusText = m.status || 'pending';
 
       const pinRepCnt = await fetchMarkerPendingCount(m.id);
+      
+      // ✅ 조회수 표시
+      const viewCount = m.viewCount || 0;
+      $pinViewCount.textContent = `조회 ${viewCount}`;
 
-      // 작성자 닉/랭크 표시
+      // 작성자 닉/랭크/신뢰도 표시
       let authorDisp = '익명';
       try{
         if (m.authorUid){
           const disp = await getDisplayForUid(m.authorUid);
-          authorDisp = fmtDisplay(disp.nick, disp.rankCode, disp.isAdmin);
+          authorDisp = `<span class="clickable" data-uid="${m.authorUid}">${fmtDisplay(disp.nick, disp.rankCode, disp.trust, disp.isAdmin)}</span>`;
         } else {
           authorDisp = m.displayName || '익명';
         }
       }catch{ authorDisp = m.displayName || '익명'; }
 
       $infoMeta.innerHTML = `
-        <span>${labelFor(m.category)} · by ${esc(authorDisp)} · ${statusText}</span>
+        <span>${labelFor(m.category)} · by ${authorDisp} · ${statusText}</span>
         ${pinRepCnt>0 ? `<span class="badge">신고 ${pinRepCnt}</span>`:''}
       `;
+      
+      // 유저 프로필 클릭 이벤트
+      const authorLink = $infoMeta.querySelector('[data-uid]');
+      if (authorLink){
+        authorLink.onclick = ()=> openOtherProfile(authorLink.getAttribute('data-uid'));
+      }
 
       $infoMediaTop.innerHTML = mediaTopEl(m);
       $infoBody.textContent = m.body||'';
+      
+      // ✅ 핀 반응 표시
+      const pinReactions = await loadReactions('pin', m.id, null);
+      $pinReactions.innerHTML = renderReactions(pinReactions);
+      
+      // 우클릭으로 반응 추가
+      $infoBody.oncontextmenu = (e)=>{
+        e.preventDefault();
+        showReactionMenu(e.pageX, e.pageY, 'pin', m.id, null);
+        return false;
+      };
 
       if (POKEMON_CATS.includes(m.category) && Array.isArray(m.pokemon) && m.pokemon.length){
         $infoPk.style.display='flex';
@@ -1530,6 +2335,12 @@
       const isMine = me && me.uid===m.authorUid;
       const canEdit = isMine && (m.status==='pending'||m.status===undefined);
       const hiddenNow = isHiddenByReport(m);
+      
+      // ✅ 확인 버튼 상태
+      const rec = markerMap.get(m.id);
+      if (rec){
+        $btnConfirm.textContent = rec.confirmed ? '✓ 확인됨' : '✓ 확인';
+      }
 
       $infoBtns.innerHTML = `
         <button id="btnReport" class="primary">핀 신고</button>
@@ -1575,6 +2386,12 @@
       if (btnAdminDel) btnAdminDel.onclick = async ()=>{
         if (!firebaseOk) return;
         if (!confirm('이 핀을 완전히 삭제할까요?')) return;
+        
+        // ✅ 작성자 통계 업데이트
+        if (m.authorUid){
+          await safeMergeDoc(['profiles', m.authorUid], { pinsDeleted: increment(1) });
+        }
+        
         await deleteDoc(doc(db,'markers', m.id));
         $info.style.display='none'; currentOpenId=null;
       };
@@ -1598,17 +2415,24 @@
       const btnReportDismiss = document.getElementById('btnReportDismiss');
       if (btnReportDismiss) btnReportDismiss.onclick = async ()=>{
         try{
+          // ✅ 신고자에게 신뢰도 +15
+          const reports = await getDocs(query(collection(db,'markers', m.id, 'reports'), where('status','==','pending')));
+          for (const r of reports.docs){
+            const reporterUid = r.data().uid;
+            if (reporterUid) await addTrust(reporterUid, 15, '신고 반려');
+          }
+          
           try{
             const q = query(collection(db,'markers', m.id, 'reports'), where('status','==','pending'));
             const s = await getDocs(q);
             await Promise.all(s.docs.map(d=> updateDoc(d.ref, { status:'rejected', reviewedAt: serverTimestamp() })));
-          }catch(_e){}
+          }catch(e){ console.warn('reject pending reports failed', e); }
           await updateDoc(doc(db,'markers', m.id), { hiddenUntil: null, reportPendingCount: 0, reportsBlocked: true });
           try{
             const q2 = query(collection(db,'adminReports'), where('markerId','==', m.id));
             const s2 = await getDocs(q2);
             await Promise.all(s2.docs.map(d=> deleteDoc(d.ref)));
-          }catch(_e){}
+          }catch(e){ console.warn('reject pending reports failed', e); }
           const rec = markerMap.get(m.id);
           if (rec){ rec.data.hiddenUntil = null; rec.data.reportPendingCount=0; rec.data.reportsBlocked=true; applyVisibility(m.id); }
           alert('핀 신고를 반려하고, 추가 신고를 차단했습니다.');
@@ -1629,7 +2453,6 @@
         }
       };
 
-      /* ✅ 링크 복사 */
       $copyLinkBtn.onclick = async ()=>{
         const url = new URL(location.href);
         url.searchParams.set('mid', m.id);
@@ -1646,10 +2469,18 @@
     }
 
     const $infoClose=document.getElementById('infoClose');
-    let currentOpenId=null;
+    // 닉네임(작성자 표시 포함) 클릭 시 해당 유저 프로필 모달 열기 — 이벤트 위임
+    document.addEventListener('click', (e)=>{
+      const t = e.target.closest('[data-uid]');
+      if (t) {
+        const uid = t.getAttribute('data-uid');
+        if (uid) openOtherProfile(uid);
+     }
+    });
+        let currentOpenId=null;
     $infoClose.onclick=()=>{ $info.style.display='none'; currentOpenId=null; if (unsubComments){unsubComments();unsubComments=null;} };
 
-    /* ✅ 딥링크 (?mid=) */
+    /* 딥링크 */
     let deepLinkTried = false;
     function tryOpenDeepLink(){
       if (deepLinkTried) return;
@@ -1686,6 +2517,17 @@
     const b=document.getElementById('mBody');
     const imgsInp=document.getElementById('mImgs');
     const videoInp=document.getElementById('mVideo');
+    
+    // ✅ 추가 입력 필드
+    const tmEditor = document.getElementById('tmEditor');
+    const tmNumber = document.getElementById('tmNumber');
+    const tmName = document.getElementById('tmName');
+    const megaEditor = document.getElementById('megaEditor');
+    const megaPokemon = document.getElementById('megaPokemon');
+    const missionEditor = document.getElementById('missionEditor');
+    const missionNumber = document.getElementById('missionNumber');
+    const itemEditor = document.getElementById('itemEditor');
+    const itemName = document.getElementById('itemName');
 
     document.getElementById('cancelBtn').onclick=()=>{ modal.style.display='none'; pending=null; };
     modal.addEventListener('click', (e)=>{ if(e.target===modal){ modal.style.display='none'; pending=null; } });
@@ -1704,7 +2546,18 @@
     pkAddInput.addEventListener('keydown', e=>{ if(e.key==='Enter') addPk(); });
     pkAddClear.onclick = ()=>{ pkList=[]; redrawPkChips(); };
 
-    catSel.addEventListener('change', ()=>{ pkEditor.style.display = POKEMON_CATS.includes(catSel.value) ? 'block' : 'none'; });
+    // (카테고리 선택 초기화)
+      catSel.value = CATEGORIES[0].key;
+      const cat = catSel.value;
+      pkEditor.style.display      = POKEMON_CATS.includes(cat) ? 'block' : 'none';
+      tmEditor.style.display      = (cat === TM_CAT) ? 'block' : 'none';
+      megaEditor.style.display    = (cat === MEGA_STONE_CAT) ? 'block' : 'none';
+      missionEditor.style.display = MISSION_CATS.includes(cat) ? 'block' : 'none';
+      itemEditor.style.display    = ITEM_CATS.includes(cat) ? 'block' : 'none';
+
+      // 작성 모달 오픈
+      modal.style.display = 'flex';
+     
 
     let pending=null;
     map.on('click', (e)=>{
@@ -1713,9 +2566,16 @@
       if(!isInside(e.latlng)){ alert('맵 바깥에는 등록할 수 없습니다'); return; }
       pending=e.latlng;
       t.value=''; b.value=''; imgsInp.value=''; videoInp.value='';
+      tmNumber.value=''; tmName.value=''; megaPokemon.value=''; missionNumber.value=''; itemName.value='';
       pkList=[]; redrawPkChips();
       if (!catSel.value) catSel.value=CATEGORIES[0].key;
-      pkEditor.style.display = POKEMON_CATS.includes(catSel.value) ? 'block' : 'none';
+      
+      const cat = catSel.value;
+      pkEditor.style.display = POKEMON_CATS.includes(cat) ? 'block' : 'none';
+      tmEditor.style.display = cat === TM_CAT ? 'block' : 'none';
+      megaEditor.style.display = cat === MEGA_STONE_CAT ? 'block' : 'none';
+      missionEditor.style.display = MISSION_CATS.includes(cat) ? 'block' : 'none';
+      itemEditor.style.display = ITEM_CATS.includes(cat) ? 'block' : 'none';      
       modal.style.display='flex';
     });
 
@@ -1748,7 +2608,7 @@
 
         setBtn('저장 중…');
         const inPkCat = POKEMON_CATS.includes(catSel.value);
-        await addDoc(collection(db,'markers'), {
+        const markerData = {
           x: pending.lng, y: pending.lat,
           title: t.value, body: b.value,
           category: catSel.value,
@@ -1758,12 +2618,48 @@
           status: 'pending',
           hiddenUntil: null,
           reportPendingCount: 0, reportsBlocked: false,
+          viewCount: 0,
+          _localCreatedAt: Date.now(), // ✅ 보정용
           ...(inPkCat ? { pokemon: pkList, pokemonNorm: pkList.map(normName) } : {})
-        });
+        };
+        
+        // ✅ 추가 필드 저장
+        if (catSel.value === TM_CAT){
+          markerData.tmNumber = tmNumber.value;
+          markerData.tmName = tmName.value;
+        }
+        if (catSel.value === MEGA_STONE_CAT){
+          markerData.megaPokemon = megaPokemon.value;
+        }
+        if (MISSION_CATS.includes(catSel.value)){
+          markerData.missionNumber = missionNumber.value;
+        }
+        if (ITEM_CATS.includes(catSel.value)){
+          markerData.itemName = itemName.value;
+        }
+        
+        await addDoc(collection(db,'markers'), markerData);
         modal.style.display='none'; pending=null;
         setBtn('등록 완료!'); setTimeout(()=>{ saveBtn.disabled=false; setBtn(prevTxt); }, 700);
 
+        // ✅ 신뢰도 +10
+        await addTrust(me.uid, 10, '핀 등록');
+        
+        // ✅ 통계 업데이트
+        await updateDoc(doc(db,'profiles', me.uid), {
+          pinsCreated: increment(1)
+        });
+        
+        // ✅ 주간 미션 체크
+        const weekNum = getWeekNumber(new Date());
+        const wRef = doc(db,'profiles', me.uid, 'missions', 'weekly');
+        await setDoc(wRef, {
+          currentWeek: weekNum,
+          pinsThisWeek: increment(1)
+        }, {merge:true});
+        
         await awardXP('pin');
+        await checkAchievements(me.uid);
       } catch (err) {
         alert('저장 실패: ' + (err?.message||err));
         saveBtn.disabled=false; setBtn(prevTxt);
@@ -1784,34 +2680,117 @@
     // 초기 구독
     subscribeMarkers();
     subscribeReportedCommentsAdmin();
+    // === 타 유저 프로필 열기 ===
+    async function openOtherProfile(uid){
+      if (!uid) return;
+      if (!firebaseOk){ alert('오프라인 상태입니다.'); return; }
+
+      try{
+        const [pfSnap, adSnap] = await Promise.all([
+          getDoc(doc(db,'profiles', uid)).catch(()=>null),
+        getDoc(doc(db,'admins', uid)).catch(()=>null)
+      ]);
+
+      const d = (pfSnap && pfSnap.exists()) ? (pfSnap.data()||{}) : {};
+        const isAdm = !!(adSnap && adSnap.exists());
+
+      const nick  = d.nick || '익명';
+      const rank  = isAdm ? '관리자' : (d.rankCode || 'Z');
+      const trust = (d.trust !== undefined) ? d.trust : 10;
+      const xp    = d.xp || 0;
+      const views = d.totalViews || 0;
+
+      document.getElementById('opNick').textContent  = nick;
+        document.getElementById('opRank').textContent  = rank;
+        document.getElementById('opTrust').textContent = trust;
+        document.getElementById('opXp').textContent    = xp;
+      document.getElementById('opViews').textContent = views;
+
+      // 전시 업적
+      const wrap = document.getElementById('opAchievementList');
+        const displayed = d.achievementsDisplayed || [];
+        const unlocked  = new Set(d.achievementsUnlocked || []);
+        const byId = new Map(ACHIEVEMENTS.map(a=>[a.id,a]));
+        const list = (displayed.length ? displayed : Array.from(unlocked).slice(0,3))
+                      .map(id => byId.get(id))
+                      .filter(Boolean);
+      
+        wrap.innerHTML = list.length
+          ? list.map(a=>`<span class="achievement-badge ${a.tier}">${a.name}</span>`).join('')
+          : '<div style="opacity:.7">전시된 업적이 없습니다</div>';
+          const modal = document.getElementById('otherProfileModal');
+        modal.style.display = 'flex';
+        document.getElementById('opClose').onclick = ()=>{ modal.style.display='none'; };
+        modal.addEventListener('click', (e)=>{ if(e.target===modal) modal.style.display='none'; }, { once:true });
+      }catch(e){
+       console.warn('[openOtherProfile] failed', e);
+       alert('프로필을 불러오지 못했습니다.');   
+      }
+    }
 
     /* ====== 프로필 UI ====== */
     const profileModal = document.getElementById('profileModal');
     const pfNick = document.getElementById('pfNick');
     const pfRank = document.getElementById('pfRank');
-    const pfRemain = document.getElementById('pfRemain');
+    const pfTrust = document.getElementById('pfTrust');
+    const pfXpFill = document.getElementById('pfXpFill');
+    const pfXpText = document.getElementById('pfXpText');
+    const pfTotalViews = document.getElementById('pfTotalViews');
+    const pfTotalReactions = document.getElementById('pfTotalReactions');
     const pfWho = document.getElementById('pfWho');
     const pfClose = document.getElementById('pfClose');
     const pfSave = document.getElementById('pfSave');
+    const pfTrustHistory = document.getElementById('pfTrustHistory');
+    const pfManageAchievements = document.getElementById('pfManageAchievements');
+    const pfAchievementList = document.getElementById('pfAchievementList');
+    
     function openProfile(force=false){
       if (!me){ alert('로그인이 필요합니다.'); return; }
       pfWho.textContent = `구글: ${me.displayName||'(이름 없음)'} · ${me.email||''}`;
       profileModal.style.display='flex';
       loadProfile(force);
     }
+    
     async function loadProfile(){
       if (!firebaseOk || !me) return;
       const pfRef = doc(db,'profiles', me.uid);
       const s = await getDoc(pfRef);
-      const d = s.exists()? (s.data()||{}) : { nick: me.displayName||'익명', xp:0, rankCode:'Z' };
+      const d = s.exists()? (s.data()||{}) : { nick: me.displayName||'익명', xp:0, rankCode:'Z', trust:10 };
       pfNick.value = d.nick || (me.displayName||'익명');
-      pfRank.textContent = d.rankCode || 'Z';
-      const calc = totalToRank(d.xp||0);
-      pfRemain.textContent = (calc.next>0) ? `${calc.next} XP` : (calc.cap ? '최대' : '0 XP');
+      
+      // ✅ 관리자는 랭크를 "관리자"로 표시, XP바 꽉 찬 상태, 남은 경험치 X
+      if (isAdmin){
+        pfRank.textContent = '관리자';
+        pfXpFill.style.width = '100%';
+        pfXpText.textContent = 'X';
+      } else {
+        pfRank.textContent = d.rankCode || 'Z';
+        const calc = totalToRank(d.xp||0);
+        const percent = calc.next > 0 ? Math.round((calc.cur / (calc.cur + calc.next)) * 100) : 100;
+        pfXpFill.style.width = percent + '%';
+        pfXpText.textContent = `${calc.cur} / ${calc.cur + calc.next} XP`;
+      }
+      
+      pfTrust.textContent = d.trust !== undefined ? d.trust : 10;
+      pfTrust.className = (d.trust||10) < 0 ? 'trust-negative' : '';
+      pfTotalViews.textContent = d.totalViews || 0;
+      pfTotalReactions.textContent = d.reactionsReceived || 0;
+      
+      // ✅ 전시 업적 표시
+      const displayed = d.achievementsDisplayed || [];
+      const unlocked = d.achievementsUnlocked || [];
+      pfAchievementList.innerHTML = displayed.length > 0
+        ? displayed.map(achId=>{
+            const ach = ACHIEVEMENTS.find(a=>a.id===achId);
+            return ach ? `<div class="achievement-badge ${ach.tier}">${ach.name}</div>` : '';
+          }).join('')
+        : '<div style="opacity:.7">전시된 업적이 없습니다</div>';
     }
+    
     $btnProfile.onclick = ()=> openProfile();
     pfClose.onclick = ()=> profileModal.style.display='none';
     profileModal.addEventListener('click', (e)=>{ if(e.target===profileModal) profileModal.style.display='none'; });
+    
     pfSave.onclick = async ()=>{
       if (!firebaseOk || !me) return;
       const nick = (pfNick.value||'').trim() || (me.displayName||'익명');
@@ -1821,6 +2800,222 @@
       await refreshTopName();
       alert('프로필이 저장되었습니다.');
     };
+    
+    pfTrustHistory.onclick = ()=> openTrustHistory();
+    pfManageAchievements.onclick = ()=> openAchievementManagement();
+
+    /* ====== 타 유저 프로필 모달 ====== */
+    const otherProfileModal = document.getElementById('otherProfileModal');
+    const opNick = document.getElementById('opNick');
+    const opRank = document.getElementById('opRank');
+    const opTrust = document.getElementById('opTrust');
+    const opXp = document.getElementById('opXp');
+    const opViews = document.getElementById('opViews');
+    const opAchievementList = document.getElementById('opAchievementList');
+    const opClose = document.getElementById('opClose');
+    
+    
+    
+    opClose.onclick = ()=> otherProfileModal.style.display='none';
+    otherProfileModal.addEventListener('click', (e)=>{ if(e.target===otherProfileModal) otherProfileModal.style.display='none'; });
+
+    /* ====== 신뢰도 내역 모달 ====== */
+    const trustHistoryModal = document.getElementById('trustHistoryModal');
+    const trustHistoryList = document.getElementById('trustHistoryList');
+    const thClose = document.getElementById('thClose');
+    
+    async function openTrustHistory(){
+      if (!firebaseOk || !me) return;
+      const q = query(collection(db,'profiles', me.uid, 'trustHistory'), orderBy('timestamp','desc'), limit(50));
+      const snap = await getDocs(q);
+      
+      if (snap.empty){
+        trustHistoryList.innerHTML = '<div style="opacity:.7">내역이 없습니다</div>';
+      } else {
+        trustHistoryList.innerHTML = snap.docs.map(d=>{
+          const data = d.data();
+          const amountClass = data.amount >= 0 ? 'trust-positive' : 'trust-negative';
+          return `
+            <div style="background:#2a2a2a; padding:8px; margin:6px 0; border-radius:6px">
+              <div><span class="${amountClass}">${data.amount >= 0 ? '+' : ''}${data.amount}</span> · ${esc(data.reason||'')}</div>
+              <div style="font-size:11px; opacity:.7">${new Date(toMs(data.timestamp)).toLocaleString()} · 총 ${data.newTotal}</div>
+            </div>
+          `;
+        }).join('');
+      }
+      
+      trustHistoryModal.style.display='flex';
+    }
+    
+    thClose.onclick = ()=> trustHistoryModal.style.display='none';
+    trustHistoryModal.addEventListener('click', (e)=>{ if(e.target===trustHistoryModal) trustHistoryModal.style.display='none'; });
+
+    /* ====== 업적 관리 모달 ====== */
+    const achievementModal = document.getElementById('achievementModal');
+    const achievementList = document.getElementById('achievementList');
+    const achClose = document.getElementById('achClose');
+    
+    async function openAchievementManagement(){
+      if (!firebaseOk || !me) return;
+      const pfSnap = await getDoc(doc(db,'profiles', me.uid));
+      const unlocked = pfSnap.exists() ? (pfSnap.data().achievementsUnlocked || []) : [];
+      const displayed = pfSnap.exists() ? (pfSnap.data().achievementsDisplayed || []) : [];
+      
+      achievementList.innerHTML = ACHIEVEMENTS.map(ach=>{
+        const isUnlocked = unlocked.includes(ach.id);
+        const isDisplayed = displayed.includes(ach.id);
+        const tierLabels = {normal:'노말', rare:'레어', epic:'에픽', legend:'레전드'};
+        
+        return `
+          <div class="achievement-badge ${ach.tier}" style="display:flex; justify-content:space-between; align-items:center; opacity:${isUnlocked?1:0.3}; margin:8px 0">
+            <div>
+              <strong>${ach.name}</strong> (${tierLabels[ach.tier]})<br>
+              <span style="font-size:11px">${ach.desc}</span>
+            </div>
+            ${isUnlocked ? `
+              <button class="tbtn" style="margin:0" data-toggle="${ach.id}">
+                ${isDisplayed ? '전시 해제' : '전시하기'}
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+      
+      achievementList.onclick = async (e)=>{
+        const btn = e.target.closest('[data-toggle]');
+        if (!btn) return;
+        const achId = btn.getAttribute('data-toggle');
+        const pfRef = doc(db,'profiles', me.uid);
+        const pfSnap = await getDoc(pfRef);
+        const currentDisplayed = pfSnap.data().achievementsDisplayed || [];
+        
+        if (currentDisplayed.includes(achId)){
+          await updateDoc(pfRef, {
+            achievementsDisplayed: arrayRemove(achId)
+          });
+        } else {
+          if (currentDisplayed.length >= 3){
+            alert('최대 3개까지만 전시할 수 있습니다');
+            return;
+          }
+          await updateDoc(pfRef, {
+            achievementsDisplayed: arrayUnion(achId)
+          });
+        }
+        openAchievementManagement();
+      };
+      
+      achievementModal.style.display='flex';
+    }
+    
+    achClose.onclick = ()=> achievementModal.style.display='none';
+    achievementModal.addEventListener('click', (e)=>{ if(e.target===achievementModal) achievementModal.style.display='none'; });
+
+    /* ====== 관리자 메신저 모달 ====== */
+    const messengerModal = document.getElementById('messengerModal');
+    const chatBox = document.getElementById('chatBox');
+    const msgInput = document.getElementById('msgInput');
+    const msgSend = document.getElementById('msgSend');
+    const msgClose = document.getElementById('msgClose');
+    let unsubChat=null;
+
+    function openMessenger(){
+      if (!isAdmin){ alert('관리진 전용'); return; }
+      messengerModal.style.display='flex';
+      markSeenNow();
+      if (!unsubChat){
+        const qy = query(collection(db,'adminChat'), orderBy('createdAt','asc'));
+        unsubChat = onSnapshot(qy, async snap=>{
+          chatBox.innerHTML = '';
+          for (const d of snap.docs){
+            const v = d.data()||{};
+            if (v.type==='notice'){
+              chatBox.insertAdjacentHTML('beforeend', `
+                <div class="sys-notice">
+                  <h4>📢 공지: ${esc(v.title||'(제목 없음)')}</h4>
+                  <p>${esc(v.body||'')}</p>
+                </div>
+              `);
+            } else if (v.type==='suggestion'){
+              // ✅ 건의 및 문의 카드
+              chatBox.insertAdjacentHTML('beforeend', `
+                <div class="sys-notice" style="background:#1a3a5f; cursor:pointer" data-suggest-id="${v.suggestionId}">
+                  <h4>💡 새 건의: ${esc(v.title||'(제목 없음)')}</h4>
+                  <p>${esc((v.body||'').slice(0,100))}${(v.body||'').length>100?'...':''}</p>
+                </div>
+              `);
+            } else {
+              const mine = v.uid===me?.uid;
+              const disp = await getDisplayForUid(v.uid);
+              chatBox.insertAdjacentHTML('beforeend', `
+                <div class="chat-row ${mine?'me':'other'}">
+                  <div>
+                    <div class="bubble">${esc(v.body||'')}</div>
+                    <div class="chat-meta">${esc(fmtDisplay(disp.nick, disp.rankCode, disp.trust, disp.isAdmin))} · ${new Date(toMs(v.createdAt||Date.now())).toLocaleString()}</div>
+                  </div>
+                </div>
+              `);
+            }
+          }
+          
+          // 건의 카드 클릭 이벤트
+          chatBox.querySelectorAll('[data-suggest-id]').forEach(card=>{
+            card.onclick = (ev)=>{
+              ev.preventDefault();
+              const y = chatBox.scrollTop;
+              openSuggestDetail(card.getAttribute('data-suggest-id'));
+              setTimeout(()=> chatBox.scrollTop = y, 0);
+            };
+          });
+          
+          chatBox.scrollTop = chatBox.scrollHeight;
+        });
+      }
+    }
+    
+    function closeMessenger(){ messengerModal.style.display='none'; }
+    msgClose.onclick = closeMessenger;
+    messengerModal.addEventListener('click', (e)=>{ if(e.target===messengerModal) closeMessenger(); });
+
+    msgSend.onclick = async ()=>{
+      const body = (msgInput.value||'').trim();
+      if (!body) return;
+      await addDoc(collection(db,'adminChat'), { uid: me?.uid||null, body, type:'text', createdAt: serverTimestamp() });
+      msgInput.value='';
+      markSeenNow();
+    };
+
+    $btnMsg.onclick = ()=> openMessenger();
+
+    async function markSeenNow(){
+      if (!firebaseOk || !me || !isAdmin) return;
+      await setDoc(doc(db,'adminSeen', me.uid), { last: serverTimestamp() }, { merge:true });
+      $msgBang.classList.remove('show');
+    }
+    
+    function wireAdminMessenger(){
+      // 중복 선언 방지: 이미 있으면 건드리지 않음
+      globalThis.wireAdminMessenger ??= function wireAdminMessenger(){
+        /* no-op: 관리자 메신저 미구현 방지 */
+      };
+
+      if (!firebaseOk || !isAdmin || !me) { $msgBang.classList.remove('show'); return; }
+      const unsubs = [];
+      Promise.all([
+        getDoc(doc(db,'adminSeen', me.uid)).catch(()=>null)
+      ]).then(([seen])=>{
+        let last = toMs(seen?.data()?.last) || 0;
+        unsubs.push(onSnapshot(query(collection(db,'adminChat'), orderBy('createdAt','asc')), snap=>{
+          let hasNew=false;
+          snap.forEach(d=>{
+            const v=d.data()||{};
+            const ct = toMs(v.createdAt||0) || 0;
+            if (ct>last && v.uid!==me?.uid){ hasNew=true; }
+          });
+          $msgBang.classList.toggle('show', hasNew);
+        }));
+      });
+    }
 
     /* ====== 공지 시스템 ====== */
     const noticeModal = document.getElementById('noticeModal');
@@ -1839,6 +3034,7 @@
     const noticeAdminBtns = document.getElementById('noticeAdminBtns');
     const noticeHide24 = document.getElementById('noticeHide24');
     const noticeDismiss = document.getElementById('noticeDismiss');
+    const noticeViewCount = document.getElementById('noticeViewCount');
     const ntTitle = document.getElementById('ntTitle');
     const ntBody = document.getElementById('ntBody');
     const ntFiles = document.getElementById('ntFiles');
@@ -1854,7 +3050,18 @@
       noticeListModal.style.display='flex';
       renderNoticeList();
       ntNew.style.display = isAdmin ? 'inline-block' : 'none';
+      
+      // ✅ 일일 미션: 공지 확인
+      if (me){
+        const today = new Date().toISOString().split('T')[0];
+        const mRef = doc(db,'profiles', me.uid, 'missions', 'daily');
+        setDoc(mRef, {
+          noticeCheckedToday: true,
+          lastNoticeCheckDate: today
+        }, {merge:true});
+      }
     }
+    
     ntListClose.onclick = ()=> noticeListModal.style.display='none';
     noticeListModal.addEventListener('click', (e)=>{ if(e.target===noticeListModal) noticeListModal.style.display='none'; });
 
@@ -1864,9 +3071,10 @@
       ntListWrap.innerHTML = [...snap.docs].map(d=>{
         const v = d.data()||{};
         const dt = new Date(toMs(v.createdAt||Date.now())).toLocaleString();
+        const viewCount = v.viewCount || 0;
         return `<div class="ritem" data-id="${d.id}">
           <div style="font-weight:600">${esc(v.title||'(제목 없음)')}</div>
-          <div class="meta">${dt}</div>
+          <div class="meta">${dt} · 조회 ${viewCount}</div>
           <div style="margin-top:6px"><button class="rbtn" data-open>열기</button></div>
         </div>`;
       }).join('') || `<div style="opacity:.7">등록된 공지가 없습니다.</div>`;
@@ -1881,14 +3089,20 @@
       if (!s.exists()){ alert('삭제된 공지입니다'); return; }
       const v = s.data()||{};
       currentNoticeId = id;
+      
+      // ✅ 조회수 증가
+      await safeMergeDoc(['markers', markerId], { viewCount: increment(1) });
+      
       noticeEdit.style.display='none';
       noticeView.style.display='block';
       noticeModal.style.display='flex';
       noticeTitle.textContent = v.title||'(제목 없음)';
       noticeBody.textContent = v.body||'';
       noticeDate.textContent = new Date(toMs(v.createdAt||Date.now())).toLocaleString();
+      noticeViewCount.textContent = `조회 ${(v.viewCount||0)+1}`;
+      
       if (Array.isArray(v.files)&&v.files.length){
-        noticeFiles.innerHTML = v.files.map(f=>`<div><a href="${f.url}" target="_blank" rel="noopener noreferrer">${esc(f.name||'파일')}</a></div>`).join(''); /* rel 보강 */
+        noticeFiles.innerHTML = v.files.map(f=>`<div><a href="${f.url}" target="_blank" rel="noopener noreferrer">${esc(f.name||'파일')}</a></div>`).join('');
       } else noticeFiles.innerHTML='';
 
       if (isAdmin){
@@ -1907,6 +3121,7 @@
         noticeAdminBtns.innerHTML = '';
       }
     }
+    
     noticeClose.onclick = ()=> noticeModal.style.display='none';
     noticeModal.addEventListener('click', (e)=>{ if(e.target===noticeModal) noticeModal.style.display='none'; });
 
@@ -1942,7 +3157,8 @@
         body: ntBody.value||'',
         files: uploaded,
         authorUid: me?.uid||null,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        viewCount: 0
       };
       const docRef = currentNoticeId
         ? (await updateDoc(doc(db,'notices', currentNoticeId), payload), { id: currentNoticeId })
@@ -1972,7 +3188,6 @@
     };
     noticeDismiss.onclick = ()=> noticeModal.style.display='none';
 
-    // 최근 공지 자동 팝업
     async function autoPopupLatestNotice(){
       if (!firebaseOk) return;
       const qs = query(collection(db,'notices'), orderBy('createdAt','desc'), limit(1));
@@ -1993,89 +3208,349 @@
 
     setTimeout(autoPopupLatestNotice, 1200);
 
-    /* ====== 관리진 메신저 ====== */
-    const messengerModal = document.getElementById('messengerModal');
-    const chatBox = document.getElementById('chatBox');
-    const msgInput = document.getElementById('msgInput');
-    const msgSend = document.getElementById('msgSend');
-    const msgClose = document.getElementById('msgClose');
-    let unsubChat=null;
-
-    function openMessenger(){
-      if (!isAdmin){ alert('관리진 전용'); return; }
-      messengerModal.style.display='flex';
-      markSeenNow();
-      if (!unsubChat){
-        const qy = query(collection(db,'adminChat'), orderBy('createdAt','asc'));
-        unsubChat = onSnapshot(qy, async snap=>{
-          chatBox.innerHTML = '';
-          for (const d of snap.docs){
-            const v = d.data()||{};
-            if (v.type==='notice'){
-              chatBox.insertAdjacentHTML('beforeend', `
-                <div class="sys-notice">
-                  <h4>📢 공지: ${esc(v.title||'(제목 없음)')}</h4>
-                  <p>${esc(v.body||'')}</p>
-                </div>
-              `);
-            } else {
-              const mine = v.uid===me?.uid;
-              const disp = await getDisplayForUid(v.uid);
-              chatBox.insertAdjacentHTML('beforeend', `
-                <div class="chat-row ${mine?'me':'other'}">
-                  <div>
-                    <div class="bubble">${esc(v.body||'')}</div>
-                    <div class="chat-meta">${esc(fmtDisplay(disp.nick, disp.rankCode, disp.isAdmin))} · ${new Date(toMs(v.createdAt||Date.now())).toLocaleString()}</div>
-                  </div>
-                </div>
-              `);
-            }
-          }
-          chatBox.scrollTop = chatBox.scrollHeight;
-        });
-      }
+    /* ====== 건의 및 문의 시스템 ====== */
+    const btnSuggestList = document.getElementById('btnSuggestList');
+    const suggestListModal = document.getElementById('suggestListModal');
+    const sgListWrap = document.getElementById('sgListWrap');
+    const sgNew = document.getElementById('sgNew');
+    const sgListClose = document.getElementById('sgListClose');
+    
+    const suggestModal = document.getElementById('suggestModal');
+    const sgView = document.getElementById('sgView');
+    const sgEdit = document.getElementById('sgEdit');
+    const sgClose = document.getElementById('sgClose');
+    const sgTitle = document.getElementById('sgTitle');
+    const sgBody = document.getElementById('sgBody');
+    const sgDate = document.getElementById('sgDate');
+    const sgReplies = document.getElementById('sgReplies');
+    const sgReplyForm = document.getElementById('sgReplyForm');
+    const sgReplyBody = document.getElementById('sgReplyBody');
+    const sgReplySubmit = document.getElementById('sgReplySubmit');
+    const sgEditTitle = document.getElementById('sgEditTitle');
+    const sgEditBody = document.getElementById('sgEditBody');
+    const sgEditCancel = document.getElementById('sgEditCancel');
+    const sgEditSave = document.getElementById('sgEditSave');
+    
+    let currentSuggestId = null;
+    
+    btnSuggestList.onclick = ()=> openSuggestList();
+    
+    function openSuggestList(){
+      if (!firebaseOk){ alert('네트워크 필요'); return; }
+      suggestListModal.style.display='flex';
+      renderSuggestList();
     }
-    function closeMessenger(){ messengerModal.style.display='none'; }
-    msgClose.onclick = closeMessenger;
-    messengerModal.addEventListener('click', (e)=>{ if(e.target===messengerModal) closeMessenger(); });
+    
+    sgListClose.onclick = ()=> suggestListModal.style.display='none';
+    suggestListModal.addEventListener('click', (e)=>{ if(e.target===suggestListModal) suggestListModal.style.display='none'; });
+    
+    async function renderSuggestList(){
+      const qs = query(collection(db,'suggestions'), orderBy('createdAt','desc'));
+      const snap = await getDocs(qs);
+      sgListWrap.innerHTML = [...snap.docs].map(d=>{
+        const v = d.data()||{};
+        const dt = new Date(toMs(v.createdAt||Date.now())).toLocaleString();
+        const replyCount = v.replyCount || 0;
+        return `<div class="ritem" data-id="${d.id}">
+          <div style="font-weight:600">${esc(v.title||'(제목 없음)')}</div>
+          <div class="meta">${dt} · 답변 ${replyCount}개</div>
+          <div style="margin-top:6px"><button class="rbtn" data-open>열기</button></div>
+        </div>`;
+      }).join('') || `<div style="opacity:.7">등록된 건의가 없습니다.</div>`;
+      sgListWrap.onclick = (e)=>{
+        const card = e.target.closest('.ritem'); if(!card) return;
+        if (e.target.matches('[data-open]')) openSuggestDetail(card.getAttribute('data-id'));
+      };
+    }
+    
+    sgNew.onclick = ()=>{
+      if (!me){ alert('로그인이 필요합니다'); return; }
+      sgEdit.style.display='block';
+      sgView.style.display='none';
+      suggestModal.style.display='flex';
+      sgEditTitle.value=''; sgEditBody.value='';
+      currentSuggestId=null;
+    };
+    
+    async function openSuggestDetail(id){
+      const s = await getDoc(doc(db,'suggestions', id));
+      if (!s.exists()){ alert('삭제된 건의입니다'); return; }
+      const v = s.data()||{};
+      currentSuggestId = id;
+      
+      sgEdit.style.display='none';
+      sgView.style.display='block';
+      suggestModal.style.display='flex';
+      sgTitle.textContent = v.title||'(제목 없음)';
+      sgBody.textContent = v.body||'';
+      sgDate.textContent = new Date(toMs(v.createdAt||Date.now())).toLocaleString();
+      
+      // 답변 표시
+      const repliesSnap = await getDocs(query(collection(db,'suggestions', id, 'replies'), orderBy('createdAt','asc')));
+      if (repliesSnap.empty){
+        sgReplies.innerHTML = '<div style="opacity:.7">답변이 없습니다</div>';
+      } else {
+        const isMine = me && me.uid === v.authorUid;
+        sgReplies.innerHTML = (await Promise.all(repliesSnap.docs.map(async d=>{
+          const r = d.data();
+          if (r.isAdminReply && !isAdmin && !isMine) {
+            return '<div class="citem"><div style="opacity:.7">관리자 전용 답변입니다</div></div>';
+          }
 
-    msgSend.onclick = async ()=>{
-      const body = (msgInput.value||'').trim();
+          // ✅ 관리자 답변은 작성자와 관리자만 볼 수 있음
+          if (!isAdmin && !isMine){
+            return '<div class="citem"><div style="opacity:.7">숨겨진 댓글입니다</div></div>';
+          }
+          const disp = await getDisplayForUid(r.uid);
+          return `<div class="citem">
+            <div class="meta">${esc(fmtDisplay(disp.nick, disp.rankCode, disp.trust, disp.isAdmin))} · ${new Date(toMs(r.createdAt||Date.now())).toLocaleString()}</div>
+            <div style="white-space:pre-wrap; margin-top:6px">${esc(r.body||'')}</div>
+          </div>`;
+        }))).join('');
+      }
+      
+      sgReplyForm.style.display = isAdmin ? 'block' : 'none';
+    }
+    
+    sgClose.onclick = ()=> suggestModal.style.display='none';
+    suggestModal.addEventListener('click', (e)=>{ if(e.target===suggestModal) suggestModal.style.display='none'; });
+    
+    sgEditCancel.onclick = ()=> suggestModal.style.display='none';
+    
+    sgEditSave.onclick = async ()=>{
+      if (!me){ alert('로그인이 필요합니다'); return; }
+      const title = sgEditTitle.value.trim() || '(제목 없음)';
+      const body = sgEditBody.value.trim();
+      if (!body){ alert('내용을 입력해주세요'); return; }
+      
+      const docRef = await addDoc(collection(db,'suggestions'), {
+        title, body,
+        authorUid: me.uid,
+        createdAt: serverTimestamp(),
+        replyCount: 0
+      });
+      
+      // ✅ 관리자 메신저에 카드 추가
+      await addDoc(collection(db,'adminChat'), {
+        type:'suggestion',
+        suggestionId: docRef.id,
+        title, body,
+        createdAt: serverTimestamp(),
+        uid: me.uid
+      });
+      
+      // ✅ 통계 업데이트
+      await updateDoc(doc(db,'profiles', me.uid), {
+        suggestionsMade: increment(1)
+      });
+      
+      // ✅ 주간 미션 체크
+      const weekNum = getWeekNumber(new Date());
+      const wRef = doc(db,'profiles', me.uid, 'missions', 'weekly');
+      await setDoc(wRef, {
+        currentWeek: weekNum,
+        suggestionsThisWeek: increment(1)
+      }, {merge:true});
+      
+      await checkAchievements(me.uid);
+      
+      suggestModal.style.display='none';
+      alert('건의가 등록되었습니다');
+      renderSuggestList();
+    };
+    
+    sgReplySubmit.onclick = async ()=>{
+      if (!isAdmin){ alert('관리자 전용'); return; }
+      const body = sgReplyBody.value.trim();
       if (!body) return;
-      await addDoc(collection(db,'adminChat'), { uid: me?.uid||null, body, type:'text', createdAt: serverTimestamp() });
-      msgInput.value='';
-      markSeenNow();
+      
+      await addDoc(collection(db,'suggestions', currentSuggestId, 'replies'), {
+        body,
+        uid: me.uid,
+        createdAt: serverTimestamp(),
+        isAdminReply: true
+      });
+      
+      await updateDoc(doc(db,'suggestions', currentSuggestId), {
+        replyCount: increment(1)
+      });
+      
+      sgReplyBody.value='';
+      openSuggestDetail(currentSuggestId);
     };
 
-    $btnMsg.onclick = ()=> openMessenger();
-
-    async function markSeenNow(){
-      if (!firebaseOk || !me || !isAdmin) return;
-      await setDoc(doc(db,'adminSeen', me.uid), { last: serverTimestamp() }, { merge:true });
-      $msgBang.classList.remove('show');
+    /* ====== 미션 시스템 ====== */
+    const missionsModal = document.getElementById('missionsModal');
+    const missionsClose = document.getElementById('missionsClose');
+    const dailyMissions = document.getElementById('dailyMissions');
+    const weeklyMissions = document.getElementById('weeklyMissions');
+    
+    // ✅ 프로필 버튼에서 미션 열기
+    document.addEventListener('keydown', (e)=>{
+      if (e.key.toLowerCase() === 'q' && !['INPUT','TEXTAREA'].includes((e.target||{}).tagName)){
+        e.preventDefault();
+        openMissions();
+      }
+    });
+    
+    async function openMissions(){
+      if (!me){ alert('로그인이 필요합니다'); return; }
+      missionsModal.style.display='flex';
+      await renderMissions();
     }
-    function wireAdminMessenger(){
-      if (!firebaseOk || !isAdmin || !me) { $msgBang.classList.remove('show'); return; }
-      const unsubs = [];
-      Promise.all([
-        getDoc(doc(db,'adminSeen', me.uid)).catch(()=>null)
-      ]).then(([seen])=>{
-        let last = toMs(seen?.data()?.last) || 0;
-        unsubs.push(onSnapshot(query(collection(db,'adminChat'), orderBy('createdAt','asc')), snap=>{
-          let hasNew=false;
-          snap.forEach(d=>{
-            const v=d.data()||{};
-            const ct = toMs(v.createdAt||0) || 0;
-            if (ct>last && v.uid!==me?.uid){ hasNew=true; }
+    
+    missionsClose.onclick = ()=> missionsModal.style.display='none';
+    missionsModal.addEventListener('click', (e)=>{ if(e.target===missionsModal) missionsModal.style.display='none'; });
+    
+    async function renderMissions(){
+      if (!firebaseOk || !me) return;
+      
+      const today = new Date().toISOString().split('T')[0];
+      const weekNum = getWeekNumber(new Date());
+      
+      const dRef = doc(db,'profiles', me.uid, 'missions', 'daily');
+      const wRef = doc(db,'profiles', me.uid, 'missions', 'weekly');
+      
+      const [dSnap, wSnap] = await Promise.all([getDoc(dRef), getDoc(wRef)]);
+      const dData = dSnap.exists() ? dSnap.data() : {};
+      const wData = wSnap.exists() ? wSnap.data() : {};
+      
+      // 날짜가 바뀌면 초기화
+      if (dData.lastLoginDate !== today){
+        await setDoc(dRef, {
+          loginToday: false,
+          commentsToday: 0,
+          noticeCheckedToday: false,
+          lastLoginDate: today
+        });
+      }
+      
+      // 주가 바뀌면 초기화
+      if (wData.currentWeek !== weekNum){
+        await setDoc(wRef, {
+          currentWeek: weekNum,
+          loginDaysThisWeek: 0,
+          pinsThisWeek: 0,
+          suggestionsThisWeek: 0,
+          reactionsThisWeek: 0,
+          loginDates: []
+        });
+      }
+      
+      const pfRef = doc(db,'profiles', me.uid);
+      const pfSnap = await getDoc(pfRef);
+      const completedDaily = pfSnap.data()?.dailyMissionsCompleted || [];
+      const completedWeekly = pfSnap.data()?.weeklyMissionsCompleted || [];
+      
+      // 일일 미션 렌더링
+      dailyMissions.innerHTML = DAILY_MISSIONS.map(m=>{
+        const completed = m.check(dData) || completedDaily.includes(m.id);
+        return `
+          <div class="mission-item ${completed?'completed':''}">
+            <div>
+              <strong>${m.name}</strong>
+              <div class="mission-reward">+${m.xp} XP</div>
+            </div>
+            ${completed ? '<span style="color:#4caf50">✓</span>' : ''}
+          </div>
+        `;
+      }).join('');
+      
+      // 주간 미션 렌더링
+      weeklyMissions.innerHTML = WEEKLY_MISSIONS.map(m=>{
+        const completed = m.check(wData) || completedWeekly.includes(m.id);
+        return `
+          <div class="mission-item ${completed?'completed':''}">
+            <div>
+              <strong>${m.name}</strong>
+              <div class="mission-reward">+${m.xp} XP</div>
+            </div>
+            ${completed ? '<span style="color:#4caf50">✓</span>' : ''}
+          </div>
+        `;
+      }).join('');
+      
+      // 완료된 미션 보상 지급
+      for (const m of DAILY_MISSIONS){
+        if (m.check(dData) && !completedDaily.includes(m.id)){
+          await updateDoc(pfRef, {
+            xp: increment(m.xp),
+            dailyMissionsCompleted: arrayUnion(m.id)
           });
-          $msgBang.classList.toggle('show', hasNew);
-        }));
-      });
+        }
+      }
+      
+      for (const m of WEEKLY_MISSIONS){
+        if (m.check(wData) && !completedWeekly.includes(m.id)){
+          await updateDoc(pfRef, {
+            xp: increment(m.xp),
+            weeklyMissionsCompleted: arrayUnion(m.id)
+          });
+        }
+      }
     }
+
+    /* ====== 업적 리스트 (관리자) ====== */
+    const achievementListModal = document.getElementById('achievementListModal');
+    const achListContent = document.getElementById('achListContent');
+    const achListClose = document.getElementById('achListClose');
+    
+    // ✅ 관리자 메신저와 공지 사이에 버튼 추가 (HTML에서 수동 추가 필요)
+    if (isAdmin){
+      const achievementListBtn = document.createElement('button');
+      achievementListBtn.id = 'btnAchievementList';
+      achievementListBtn.className = 'pill-btn';
+      achievementListBtn.textContent = '업적 리스트';
+      achievementListBtn.style.display = 'inline-block';
+      achievementListBtn.onclick = ()=> openAchievementList();
+      
+      const topRight = document.querySelector('.top-right');
+      const msgBtn = document.getElementById('btnMsg');
+      topRight.insertBefore(achievementListBtn, msgBtn);
+    }
+    
+    function openAchievementList(){
+      if (!isAdmin){ alert('관리자 전용'); return; }
+      achievementListModal.style.display='flex';
+      
+      const tierLabels = {normal:'노말', rare:'레어', epic:'에픽', legend:'레전드'};
+      achListContent.innerHTML = ACHIEVEMENTS.map(ach=>`
+        <div class="achievement-badge ${ach.tier}" style="margin:8px 0; padding:12px">
+          <strong>${ach.name}</strong> (${tierLabels[ach.tier]} · +${ach.xp} XP)<br>
+          <span style="font-size:12px; opacity:.8">${ach.desc}</span>
+        </div>
+      `).join('');
+    }
+    
+    achListClose.onclick = ()=> achievementListModal.style.display='none';
+    achievementListModal.addEventListener('click', (e)=>{ if(e.target===achievementListModal) achievementListModal.style.display='none'; });
 
     /* ===== 키보드 단축키 ===== */
     document.addEventListener('keydown', (e)=>{
-      // 입력창/textarea에서는 패스
+      function closeIfOpen(id, openDisplay='flex') {
+        const el = document.getElementById(id);
+        if (el && el.style.display === openDisplay) {
+          el.style.display = 'none';
+          return true;
+        }
+        return false;
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+
+        const modals = [
+          'messengerModal','noticeModal','noticeListModal',
+          'suggestModal','suggestListModal','missionsModal','achievementListModal'
+        ];
+
+        for (const id of modals) {
+          if (closeIfOpen(id)) return;
+        }
+
+        if (info?.style.display === 'block') { infoClose?.click(); }
+      });
+
       if (['INPUT','TEXTAREA'].includes((e.target||{}).tagName)) return;
       if (e.key === '/') { e.preventDefault(); qInput.focus(); }
       if (e.key.toLowerCase() === 's') { e.preventDefault(); side.style.display = (side.style.display==='block'?'none':'block'); }
@@ -2083,16 +3558,43 @@
       if (e.key === 'Escape'){
         if (document.getElementById('modal').style.display==='flex') { document.getElementById('modal').style.display='none'; pending=null; return; }
         if (document.getElementById('profileModal').style.display==='flex') { document.getElementById('profileModal').style.display='none'; return; }
+        if (document.getElementById('otherProfileModal').style.display==='flex') { document.getElementById('otherProfileModal').style.display='none'; return; }
+        if (document.getElementById('trustHistoryModal').style.display==='flex') { document.getElementById('trustHistoryModal').style.display='none'; return; }
+        if (document.getElementById('achievementModal').style.display==='flex') { document.getElementById('achievementModal').style.display='none'; return; }
         if (document.getElementById('messengerModal').style.display==='flex') { document.getElementById('messengerModal').style.display='none'; return; }
         if (document.getElementById('noticeModal').style.display==='flex') { document.getElementById('noticeModal').style.display='none'; return; }
         if (document.getElementById('noticeListModal').style.display==='flex') { document.getElementById('noticeListModal').style.display='none'; return; }
+        if (document.getElementById('suggestModal').style.display==='flex') { document.getElementById('suggestModal').style.display='none'; return; }
+        if (document.getElementById('suggestListModal').style.display==='flex') { document.getElementById('suggestListModal').style.display='none'; return; }
+        if (document.getElementById('missionsModal').style.display==='flex') { document.getElementById('missionsModal').style.display='none'; return; }
+        if (document.getElementById('achievementListModal').style.display==='flex') { document.getElementById('achievementListModal').style.display='none'; return; }
         if ($info.style.display==='block'){ $infoClose.click(); return; }
       }
     });
 
-    /* ===== 페이지 진입 시: 최초 로그인시 닉네임 안내 ===== */
-    // onAuthStateChanged → ensureProfileOnLogin()에서 팝업
+    /* ===== showReactionMenu 글로벌 함수 ===== */
+    window.showReactionMenu = showReactionMenu;
 
+    /* ===== 카테고리별 확인된 핀 로드 ===== */
+    function loadConfirmedPins(){
+      const confirmed = {};
+      markerMap.forEach((rec, id)=>{
+        if (rec.confirmed){
+          const cat = rec.data.category;
+          confirmed[cat] = (confirmed[cat] || 0) + 1;
+        }
+      });
+      for (const [cat, count] of Object.entries(confirmed)){
+        catConfirmed.set(cat, count);
+      }
+      updateAllCategoryProgress();
+    }
+    
+    // 마커 로드 후 확인된 핀 집계
+    setTimeout(loadConfirmedPins, 2000);
+
+    console.log('✅ ZA 한글 공략 맵 초기화 완료');
+  
   </script>
 </body>
 </html>
