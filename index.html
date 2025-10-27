@@ -851,9 +851,9 @@
     }
     const labelFor=(key)=> CATEGORIES.find(c=>c.key===key)?.label || key;
     const defaultIconFor=(key)=>{
-      const def = CATEGORIES.find(c=>c.key===key)?.defaultIcon;
-      return def ? `icons/${def}` : `icons/default.png`;
-    };
+    const def = CATEGORIES.find(c=>c.key===key)?.defaultIcon;
+    return def ? `icons/${def}` : `icons/misc.png`;
+  };
 
     /* ---------------- 로그인/관리자 상태 + 프로필/랭크 ---------------- */
     const $who = document.getElementById('who');
@@ -1193,12 +1193,32 @@
 
     /* ---------------- 아이콘 캐시 ---------------- */
     const iconCache = new Map();
-    function iconUrlForCat(cat){ return categoryIconOverride.get(cat) || defaultIconFor(cat); }
-    function iconFor(cat){
-      const url = iconUrlForCat(cat);
-      const key = `${url}|32x42`;
-      if (!iconCache.has(key)) iconCache.set(key, L.icon({ iconUrl: url, iconSize:[32,42], iconAnchor:[16,42] }));
-      return iconCache.get(key);
+    function iconFor(catKey){
+     const url = iconUrlForCat(catKey);
+      if (iconCache.has(url)) return iconCache.get(url);
+      const ic = L.icon({
+        iconUrl: url,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        className: 'pin-icon'
+      });
+      iconCache.set(url, ic);
+      return ic;
+    }
+
+     function iconUrlForCat(catKey){
+      const o = categoryIconOverride.get(catKey);
+      if (o) {
+        const u = String(o).trim();
+        // 완전한 URL이나 data URL은 그대로 사용
+        if (/^(https?:)?\/\//.test(u) || u.startsWith('data:')) return u;
+        // 도메인 루트 기준 절대경로도 허용
+        if (u.startsWith('/')) return u;
+        // 파일명만 온 경우엔 /icons 프리픽스 붙여서 로컬 자원으로 처리
+        if (!u.startsWith('icons/')) return 'icons/' + u;
+        return u;
+      }
+      return defaultIconFor(catKey);
     }
 
     /* ---------------- 카테고리 그룹 & 토글 + 진행도 ---------------- */
@@ -3130,7 +3150,7 @@
       currentNoticeId = id;
       
       // ✅ 조회수 증가
-      await safeMergeDoc(['markers', markerId], { viewCount: increment(1) });
+      await safeMergeDoc(['notices', id], { viewCount: increment(1) });
       
       noticeEdit.style.display='none';
       noticeView.style.display='block';
