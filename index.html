@@ -717,6 +717,27 @@
       save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} },
       load(k,def){ try{ const v = JSON.parse(localStorage.getItem(k)||'null'); return v==null?def:v; }catch{ return def; } }
     };
+    // ---- Notice Snooze Patch (UTILS) ----
+    const SNOOZE_KEY_NOTICE = 'notice_snooze_until_ms';
+
+    function setSnoozeUntilMs(ms){
+      const v = Number(ms)||0;
+      LS.save(SNOOZE_KEY_NOTICE, v);
+    }
+    function getSnoozeUntilMs(){
+      const v = Number(LS.load(SNOOZE_KEY_NOTICE, 0));
+      return Number.isFinite(v) ? v : 0;
+    }
+    function isSnoozedNow(){
+      return getSnoozeUntilMs() > Date.now();
+    }
+    function humanRemain(ms){
+      const m = Math.max(0, Math.floor(ms/60000));
+      const h = Math.floor(m/60);
+      const mm = m%60;
+      return h ? `${h}시간 ${mm}분` : `${mm}분`;
+    }
+    // -------------------------------------
 
     /* ---------------- Leaflet ---------------- */
     const IMG_URL = "za_world_map_clean_fixed.png";
@@ -1087,7 +1108,37 @@
     }
 
     const $btnNoticeList = document.getElementById('btnNoticeList');
+    
+    // ---- Notice Snooze Patch (BUTTON WIRING) ----
+    const $noticeModalEl = document.getElementById('noticeModal');
+    const $noticeHide24  = document.getElementById('noticeHide24');
+    const $noticeDismiss = document.getElementById('noticeDismiss'); // 이미 있음
 
+    function closeNoticeModal(){
+      if ($noticeModalEl) $noticeModalEl.style.display = 'none';
+    }
+
+    if ($noticeHide24){
+      $noticeHide24.onclick = ()=>{
+        // 24시간 스누즈 설정
+        setSnoozeUntilMs(Date.now() + 24*3600*1000);
+        closeNoticeModal();
+        // 버튼 상태(툴팁/불투명도) 즉시 반영
+        const btn = document.getElementById('btnNoticeList');
+        if (btn){
+          btn.title = '공지 스누즈 중';
+          btn.style.opacity = '0.6';
+        }
+        alert('24시간 동안 공지가 자동으로 뜨지 않아요.');
+      };
+    }
+
+    if ($noticeDismiss){
+      // 그냥 닫기: 스누즈 설정 안 함
+      $noticeDismiss.onclick = ()=> closeNoticeModal();
+    }
+    // ----------------------------------------------
+  
     $login.onclick = async () => {
       if (!firebaseOk) { alert('네트워크 차단으로 로그인 불가'); return; }
       try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
@@ -1162,6 +1213,35 @@
          applyAdminUI();
           refreshTopName();
         }
+        // ---- Notice Snooze Patch (AUTO POPUP GUARD) ----
+        function guardNoticeAutoOpen(){
+          // 자동 팝업/배지 로직이 있다면, 스누즈일 때는 무조건 건너뛴다.
+          if (isSnoozedNow()){
+            const until = getSnoozeUntilMs();
+            const btn = document.getElementById('btnNoticeList');
+            if (btn){
+              btn.title = `공지 스누즈 중 (~ ${new Date(until).toLocaleString()})`;
+              btn.style.opacity = '0.6';
+              btn.classList.remove('on'); // 혹시 강조 상태면 제거
+            }
+            // 여기서 return 해서 자동 오픈 함수 호출을 막아.
+            return true;
+          }
+          // 스누즈가 아니면 버튼 상태 복원
+          const btn = document.getElementById('btnNoticeList');
+          if (btn){
+            btn.title = '공지 목록';
+            btn.style.opacity = '1';
+          }
+          return false;
+        }
+
+        // onAuthStateChanged 마지막 부분(또는 초기화 루틴 말미)에 **한 번** 호출:
+        if (!guardNoticeAutoOpen()){
+          // 여기에 너가 쓰는 자동 공지 오픈/강조 로직이 있다면 호출
+          // 예: tryOpenLatestNotice();  // 없으면 이 줄은 생략
+        }
+        // -------------------------------------------------
       }); // ← 여기서 끝나야 함 (추가 } 제거)
 
     }
