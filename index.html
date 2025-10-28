@@ -3594,7 +3594,257 @@
     setTimeout(loadConfirmedPins, 2000);
 
     console.log('✅ ZA 한글 공략 맵 초기화 완료');
-  
+
+    /* === ZA MAPS PATCH BUNDLE (drop-in) =========================================
+ * 목적: 기존 HTML(동일 문서의 <script type="module">)에 이 블록만 붙여넣으면
+ * - 상단 우측 버튼(공지/건의/메신저) 열기/닫기
+ * - 프로필/신뢰도내역/업적관리/타유저프로필 모달 열기/닫기
+ * - 상세패널 링크복사, 핀 오른쪽-클릭 반응 메뉴
+ * - 검색/핀배치 모드 토글, 단축키, 사이드바 토글
+ * 등이 바로 작동.
+ * 기존 코드(Leaflet/Firebase/각종 유틸)와 충돌 없이 “후킹”만 한다.
+ * 이 코드는 반드시 같은 <script type="module"> 내부 가장 마지막에 삽입.
+ * ========================================================================== */
+
+(function(){
+  // ----- 안전 헬퍼 -----
+  const $ = (id)=> document.getElementById(id);
+  const qs = (sel, root=document)=> root.querySelector(sel);
+  const qsa = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
+  const on = (el, ev, fn)=> el && el.addEventListener(ev, fn);
+
+  // 기존 스코프 값들 접근 (있으면 사용, 없으면 안전한 기본값)
+  const LS = globalThis.LS || { save:()=>{}, load:()=>null };
+  const map = globalThis.map || null;
+
+  // ----- 모달 공통 -----
+  function showModal(id){ const el=$(id); if(el){ el.style.display='flex'; trapFocus(el); } }
+  function hideModal(id){ const el=$(id); if(el){ el.style.display='none'; releaseFocus(); } }
+  function toggleModal(id){ const el=$(id); if(!el) return; (el.style.display==='flex')?hideModal(id):showModal(id); }
+
+  // 포커스 트랩(접근성)
+  let lastFocus=null;
+  function trapFocus(container){
+    lastFocus = document.activeElement;
+    const focusables = qsa('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])', container)
+      .filter(el=>!el.hasAttribute('disabled'));
+    if (focusables[0]) focusables[0].focus();
+    function loop(e){
+      if(e.key!=='Tab') return;
+      const first = focusables[0], last = focusables[focusables.length-1];
+      if(e.shiftKey && document.activeElement===first){ last.focus(); e.preventDefault(); }
+      else if(!e.shiftKey && document.activeElement===last){ first.focus(); e.preventDefault(); }
+    }
+    container.__trapHandler = loop;
+    container.addEventListener('keydown', loop);
+  }
+  function releaseFocus(){
+    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
+    qsa('#modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal,#trustHistoryModal,#otherProfileModal,#achievementListModal')
+      .forEach(m=>{
+        if (m.__trapHandler) { m.removeEventListener('keydown', m.__trapHandler); m.__trapHandler=null; }
+      });
+    lastFocus=null;
+  }
+
+  // ----- 상단 우측 버튼: 공지/건의/메신저 -----
+  on($('btnNoticeList'), 'click', ()=> showModal('noticeListModal'));
+  on($('btnSuggestList'), 'click', ()=> showModal('suggestListModal'));
+  on($('btnMsg'),        'click', ()=> showModal('messengerModal'));
+
+  // 공지 목록 닫기/새 공지
+  on($('ntListClose'), 'click', ()=> hideModal('noticeListModal'));
+  on($('ntNew'), 'click', ()=> { hideModal('noticeListModal'); showModal('noticeModal'); });
+
+  // 공지 본문 뷰/닫기
+  on($('noticeClose'), 'click', ()=> hideModal('noticeModal'));
+  on($('noticeDismiss'), 'click', ()=> hideModal('noticeModal'));
+  on($('noticeHide24'), 'click', ()=>{
+    try { LS.save('notice_hide_until', Date.now()+24*3600*1000); }catch{}
+    hideModal('noticeModal');
+  });
+
+  // 건의/문의 목록 닫기 & 작성하기
+  on($('sgListClose'), 'click', ()=> hideModal('suggestListModal'));
+  on($('sgNew'), 'click', ()=> { hideModal('suggestListModal'); showModal('suggestModal'); });
+
+  // 건의/문의 상세 닫기
+  on($('sgClose'), 'click', ()=> hideModal('suggestModal'));
+
+  // 관리자 메신저 닫기
+  on($('msgClose'), 'click', ()=> hideModal('messengerModal'));
+
+  // ----- 프로필/신뢰도/업적/타 유저 프로필 -----
+  on($('btnProfile'), 'click', ()=> showModal('profileModal'));
+  on($('pfClose'), 'click', ()=> hideModal('profileModal'));
+  on($('thClose'), 'click', ()=> hideModal('trustHistoryModal'));
+  on($('pfTrustHistory'), 'click', ()=> showModal('trustHistoryModal'));
+
+  // 업적 관리(내)
+  on($('pfManageAchievements'), 'click', ()=> showModal('achievementModal'));
+  on($('achClose'), 'click', ()=> hideModal('achievementModal'));
+
+  // 전체 업적(관리자용 리스트) 모달(있을 때)
+  on($('achListClose'), 'click', ()=> hideModal('achievementListModal'));
+
+  // 타 유저 프로필
+  on($('opClose'), 'click', ()=> hideModal('otherProfileModal'));
+
+  // 미션 모달 (버튼이 별도로 있다면 연결)
+  const btnMissions = $('btnMissions'); // 선택 요소(없으면 무시)
+  if (btnMissions) on(btnMissions, 'click', ()=> showModal('missionsModal'));
+  on($('missionsClose'), 'click', ()=> hideModal('missionsModal'));
+
+  // ----- 사이드바 & 모드 토글 -----
+  const side = $('side');
+  const btnSearch = $('btnSearch');
+  const btnPlace = $('btnPlace');
+
+  function setMode(mode){ // 'search' | 'place'
+    if (!btnSearch || !btnPlace) return;
+    if (mode==='search'){
+      btnSearch.classList.add('on'); btnPlace.classList.remove('on');
+      if (side) side.style.display = 'block';
+    }else{
+      btnPlace.classList.add('on'); btnSearch.classList.remove('on');
+      if (side) side.style.display = 'none';
+    }
+    try { LS.save('ui_mode', mode); }catch{}
+  }
+  // 초기 모드 복원
+  const savedMode = (LS.load('ui_mode','search')||'search');
+  setMode(savedMode);
+
+  on(btnSearch, 'click', ()=> setMode('search'));
+  on(btnPlace,  'click', ()=> setMode('place'));
+
+  // 단축키: S=검색모드, M=핀모드, /=검색 포커스, ESC=모달/상세 닫기
+  on(document, 'keydown', (e)=>{
+    const tag = (e.target && e.target.tagName)||'';
+    const inInput = /INPUT|TEXTAREA|SELECT/.test(tag);
+    if (e.key==='s' || e.key==='S'){ if(!inInput){ e.preventDefault(); setMode('search'); } }
+    if (e.key==='m' || e.key==='M'){ if(!inInput){ e.preventDefault(); setMode('place'); } }
+    if (e.key==='/'){ if(!inInput){ e.preventDefault(); $('qInput')?.focus(); } }
+    if (e.key==='Escape'){
+      // 열려있는 모달/상세 닫기
+      const openMod = qsa('#modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal,#trustHistoryModal,#otherProfileModal,#achievementListModal')
+        .find(el=> el.style.display==='flex');
+      if (openMod) { hideModal(openMod.id); return; }
+      const info = $('info');
+      if (info && info.style.display!=='none'){ qs('#infoClose', info)?.click(); }
+    }
+  });
+
+  // ----- 상세패널: 링크복사 & 핀 반응(right-click) -----
+  const copyBtn = $('copyLinkBtn');
+  if (copyBtn){
+    on(copyBtn, 'click', ()=>{
+      try{
+        const idTag = $('infoId')?.textContent?.trim() || '#-';
+        // currentOpenId는 메인 스크립트에서 유지
+        const mid = (globalThis.currentOpenId || '').trim();
+        const url = new URL(location.href);
+        if (mid) url.searchParams.set('pin', mid);
+        // 보이는 번호만 있는 경우에도 일단 복사
+        navigator.clipboard.writeText(url.toString())
+          .then(()=> alert('링크가 복사되었습니다'))
+          .catch(()=> alert('링크 복사에 실패했습니다'));
+      }catch{
+        alert('클립보드 접근이 차단되었어요');
+      }
+    });
+  }
+
+  // 핀 전체에 대한 반응 메뉴: 상세 상단 영역 우클릭 시
+  const infoPane = $('info');
+  if (infoPane){
+    on(infoPane, 'contextmenu', (e)=>{
+      // 댓글 개별 우클릭은 본문 렌더 쪽에서 이미 처리.
+      // 상세 패널 빈 곳 우클릭 시, 현재 열린 핀에 반응 달기
+      const menu = $('reactionMenu');
+      if (!menu) return;
+      const pinId = globalThis.currentOpenId;
+      if (!pinId) return;
+      e.preventDefault();
+      if (typeof globalThis.showReactionMenu === 'function'){
+        globalThis.showReactionMenu(e.pageX, e.pageY, 'pin', pinId, null);
+      }
+    });
+  }
+
+  // 반응 메뉴 바깥 클릭으로 닫기(보호)
+  const reactionMenu = $('reactionMenu');
+  if (reactionMenu){
+    on(document, 'click', (e)=>{
+      if (reactionMenu.style.display==='block' && !reactionMenu.contains(e.target)){
+        reactionMenu.style.display='none';
+      }
+    });
+  }
+
+  // ----- “공지 24시간 숨김” 적용(있다면) -----
+  try{
+    const until = LS.load('notice_hide_until', 0) || 0;
+    if (Date.now() < until){
+      // 공지 열림을 시도할 때마다 막을 수 있지만,
+      // 여기선 시작 시 목록 모달을 강제로 닫는 정도로 처리
+      const nl = $('noticeListModal'); if (nl) nl.style.display='none';
+      const nv = $('noticeModal'); if (nv) nv.style.display='none';
+    }
+  }catch{}
+
+  // ----- 접근성: 모달 배경 클릭으로 닫기 -----
+  qsa('#modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal,#trustHistoryModal,#otherProfileModal,#achievementListModal')
+    .forEach(m=>{
+      on(m, 'click', (e)=>{ if (e.target===m) hideModal(m.id); });
+    });
+
+  // ----- 사이드: 인기검색어 버튼 키보드 접근성 강화 -----
+  const qTrend = $('qTrending');
+  if (qTrend){
+    qTrend.addEventListener('keydown', (e)=>{
+      const b = e.target.closest('[data-sug]');
+      if (!b) return;
+      if (e.key==='Enter' || e.key===' '){ b.click(); e.preventDefault(); }
+    });
+  }
+
+  // ----- 줌 컨트롤 숨김을 보완하는 축소/확대 단축키(+/-) -----
+  on(document, 'keydown', (e)=>{
+    if (!map) return;
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if (e.key==='+'){ map.zoomIn(); }
+    else if (e.key==='-'){ map.zoomOut(); }
+  });
+
+  // ----- 작은 토스트 유틸(필요시) -----
+  if (typeof globalThis.toast !== 'function'){
+    globalThis.toast = (msg)=>{
+      const t = document.createElement('div');
+      t.textContent = msg;
+      Object.assign(t.style, {
+        position:'fixed', left:'50%', bottom:'24px', transform:'translateX(-50%)',
+        background:'#111c', color:'#fff', padding:'8px 12px', borderRadius:'8px',
+        zIndex: 4000, backdropFilter:'blur(4px)'
+      });
+      document.body.appendChild(t);
+      setTimeout(()=> t.remove(), 1800);
+    };
+  }
+
+  // ----- 안전: showReactionMenu가 없으면 최소 구현 -----
+  if (typeof globalThis.showReactionMenu !== 'function'){
+    globalThis.showReactionMenu = (x,y,type,targetId,parentId)=>{
+      const menu = $('reactionMenu'); if(!menu) return;
+      menu.style.left = x+'px'; menu.style.top = y+'px'; menu.style.display='block';
+      // 선택 처리 자체는 메인 구현(이미 HTML에 존재)에게 맡김
+    };
+  }
+
+  // 끝
+})();
+    
   </script>
 </body>
 </html>
+
