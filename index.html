@@ -1213,35 +1213,37 @@
          applyAdminUI();
           refreshTopName();
         }
-        // ---- Notice Snooze Patch (AUTO POPUP GUARD) ----
-        function guardNoticeAutoOpen(){
-          // 자동 팝업/배지 로직이 있다면, 스누즈일 때는 무조건 건너뛴다.
-          if (isSnoozedNow()){
-            const until = getSnoozeUntilMs();
-            const btn = document.getElementById('btnNoticeList');
-            if (btn){
-              btn.title = `공지 스누즈 중 (~ ${new Date(until).toLocaleString()})`;
-              btn.style.opacity = '0.6';
-              btn.classList.remove('on'); // 혹시 강조 상태면 제거
-            }
-            // 여기서 return 해서 자동 오픈 함수 호출을 막아.
-            return true;
-          }
-          // 스누즈가 아니면 버튼 상태 복원
-          const btn = document.getElementById('btnNoticeList');
-          if (btn){
-            btn.title = '공지 목록';
-            btn.style.opacity = '1';
-          }
-          return false;
+        // ---- Notice Snooze Patch (UTILS) ----
+        const SNOOZE_KEY_PREFIX = 'notice_snooze_until_ms:';
+        const SEEN_KEY_PREFIX   = 'notice_seen_latest_id:';
+
+        function _snoozeUid(){ return (globalThis._snoozeUid || 'anon'); }
+        function _snoozeKey(){ return SNOOZE_KEY_PREFIX + _snoozeUid(); }
+        function _seenKey(){   return SEEN_KEY_PREFIX   + _snoozeUid(); }
+
+        function setSnoozeUser(uid){ globalThis._snoozeUid = uid || 'anon'; }
+
+        function setSnoozeUntilMs(ms){
+          const v = Number(ms)||0;
+          LS.save(_snoozeKey(), v);
+        }
+        function getSnoozeUntilMs(){
+          const v = Number(LS.load(_snoozeKey(), 0));
+          return Number.isFinite(v) ? v : 0;
+        }
+        function isSnoozedNow(){ return getSnoozeUntilMs() > Date.now(); }
+
+        function humanRemain(ms){
+          const m = Math.max(0, Math.floor(ms/60000));
+          const h = Math.floor(m/60);
+          const mm = m%60;
+          return h ? `${h}시간 ${mm}분` : `${mm}분`;
         }
 
-        // onAuthStateChanged 마지막 부분(또는 초기화 루틴 말미)에 **한 번** 호출:
-        if (!guardNoticeAutoOpen()){
-          // 여기에 너가 쓰는 자동 공지 오픈/강조 로직이 있다면 호출
-          // 예: tryOpenLatestNotice();  // 없으면 이 줄은 생략
-        }
-        // -------------------------------------------------
+        // 계정별 '마지막으로 본 공지' 기록
+        function getLastSeenNoticeId(){ return LS.load(_seenKey(), '') || ''; }
+        function setLastSeenNoticeId(id){ LS.save(_seenKey(), id || ''); }
+        // -------------------------------------
       }); // ← 여기서 끝나야 함 (추가 } 제거)
 
     }
