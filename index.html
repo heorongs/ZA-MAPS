@@ -797,6 +797,99 @@
       firebaseOk = false;
       console.warn("[Firebase] 동적 import 실패 — 오프라인 모드", e);
     }
+  
+    // === 공지 자동 오픈/강조 ===
+    let currentNoticeId = null;
+
+    async function openNoticeDoc(n){
+      currentNoticeId = n.id;
+
+      const modal = document.getElementById('noticeModal');
+      const view  = document.getElementById('noticeView');
+      const edit  = document.getElementById('noticeEdit');
+
+      if (!modal || !view) return;
+      // 내용 채우기
+      document.getElementById('noticeTitle').textContent = n.title || '(제목 없음)';
+      document.getElementById('noticeBody').textContent  = n.body  || '';
+      document.getElementById('noticeDate').textContent  = n.createdAt
+          ? new Date(toMs(n.createdAt)).toLocaleString()
+          : '';
+
+      const vc = (n.viewCount || 0) + 1;
+      const vcEl = document.getElementById('noticeViewCount');
+      if (vcEl) vcEl.textContent = `조회 ${vc}`;
+
+      // 첨부(있으면)
+      const filesWrap = document.getElementById('noticeFiles');
+      if (filesWrap){
+        const files = Array.isArray(n.files) ? n.files : [];
+        filesWrap.innerHTML = files.map(u =>
+          `<div style="margin-top:6px"><a href="${esc(u)}" target="_blank" rel="noopener">첨부 보기</a></div>`
+        ).join('');
+      }
+
+      // 보기 모드 표시
+      view.style.display = 'block';
+      if (edit) edit.style.display = 'none';
+      modal.style.display = 'flex';
+
+      // 계정별 '읽음' 기록
+      setLastSeenNoticeId(n.id);
+
+      // 뱃지/하이라이트 해제
+      try {
+        const btn = document.getElementById('btnNoticeList');
+        if (btn) btn.classList.remove('on');
+      } catch {}
+
+      // 조회수 증가
+      try { await updateDoc(doc(db,'notices', n.id), { viewCount: increment(1) }); } catch(_e){}
+    }
+
+    async function tryOpenLatestNotice(){
+      if (!firebaseOk) return;
+      if (isSnoozedNow()) return;
+
+      // 최신 공지 1개
+      const qLatest = query(collection(db,'notices'), orderBy('createdAt','desc'), limit(1));
+      const snap = await getDocs(qLatest);
+      if (snap.empty) return;
+
+      const d  = snap.docs[0];
+      const n  = { id: d.id, ...d.data() };
+      const seenId = getLastSeenNoticeId();
+
+      // 이미 본 공지는 자동 오픈 안 함
+      if (seenId === d.id) {
+        // 대신 버튼을 하이라이트 해제만 보장
+        const btn = document.getElementById('btnNoticeList');
+        if (btn) btn.classList.remove('on');
+        return;
+      }
+
+      await openNoticeDoc(n);
+    }
+
+    async function highlightNoticeIfUnseen(){
+      if (!firebaseOk) return;
+      const qLatest = query(collection(db,'notices'), orderBy('createdAt','desc'), limit(1));
+      const snap = await getDocs(qLatest);
+      if (snap.empty) return;
+
+      const latestId = snap.docs[0].id;
+      const btn = document.getElementById('btnNoticeList');
+      if (!btn) return;
+
+      if (getLastSeenNoticeId() !== latestId){
+        // 새 공지 있음 → 버튼 하이라이트
+        btn.classList.add('on');
+        btn.title = '새 공지 있음';
+      } else {
+        btn.classList.remove('on');
+        btn.title = '공지 목록';
+      }
+    }
 
     /* ---------------- 업로드 유틸 ---------------- */
     async function safeMergeDoc(pathArr, data){
@@ -1134,9 +1227,12 @@
     }
 
     if ($noticeDismiss){
-      // 그냥 닫기: 스누즈 설정 안 함
-      $noticeDismiss.onclick = ()=> closeNoticeModal();
-    }
+     $noticeDismiss.onclick = ()=>{
+        // 그냥 닫아도 '읽음' 처리해서 자동 재오픈 방지
+        try { setLastSeenNoticeId(currentNoticeId || getLastSeenNoticeId()); } catch(_e){}
+        closeNoticeModal();
+      };
+  }
     // ----------------------------------------------
   
     $login.onclick = async () => {
@@ -1213,6 +1309,12 @@
          applyAdminUI();
           refreshTopName();
         }
+        
+        if (!guardNoticeAutoOpen()){
+          await highlightNoticeIfUnseen();   // 버튼에 '새 공지' 하이라이트
+          await tryOpenLatestNotice();       // 실제 자동 오픈
+        }
+        
         // ---- Notice Snooze Patch (UTILS) ----
         const SNOOZE_KEY_PREFIX = 'notice_snooze_until_ms:';
         const SEEN_KEY_PREFIX   = 'notice_seen_latest_id:';
