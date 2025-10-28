@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />  
+  <meta charset="utf-8" />
   <title>ZA 한글 공략 맵</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -691,9 +691,6 @@
     </div>
   </div>
 
-  <script type="module" src="za-patch-20251028.js"></script>
-  
-  
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module">
     /* ---------------- 유틸 ---------------- */
@@ -998,30 +995,6 @@
         snap.forEach(d=>{ const v=d.data()?.iconUrl; if (v) categoryIconOverride.set(d.id, v); });
       });
     }
-  
-    /* PATCH START: robust category resolution (2025-10-28) */
-    const CAT_BY_KEY   = new Map(CATEGORIES.map(c => [c.key, c]));
-    const CAT_BY_LABEL = new Map(CATEGORIES.map(c => [c.label, c]));    
-    function resolveCategoryKey(k){
-      if (!k) return k;
-      if (CAT_BY_KEY.has(k)) return k;
-      if (CAT_BY_LABEL.has(k)) return CAT_BY_LABEL.get(k).key;
-      const s = (k+'').toLowerCase();
-      if (s.includes('기술머신')) return TM_CAT;
-      if (s.includes('메가스톤') || s.includes('메가 스톤')) return MEGA_STONE_CAT;
-      return k; // 알 수 없으면 원본 유지
-    }
-
-    // 기존 iconUrlForCat을 교체해 라벨/키 모두 지원
-    function iconUrlForCat(cat){
-      const key = resolveCategoryKey(cat);
-      const override = categoryIconOverride.get(key);
-      if (override) return override;
-      const def = CAT_BY_KEY.get(key)?.defaultIcon;
-      return def ? `icons/${def}` : `icons/default.png`;
-    }
-    /* PATCH END */
-  
     const labelFor=(key)=> CATEGORIES.find(c=>c.key===key)?.label || key;
     const defaultIconFor=(key)=>{
     const def = CATEGORIES.find(c=>c.key===key)?.defaultIcon;
@@ -2008,30 +1981,26 @@
     }
 
     function renderChange(ch){
-      const id = ch.doc.id;
-      if (ch.type === 'removed'){
-        const prev = markerMap.get(id);
-        if (prev){ prev.group.removeLayer(prev.marker); markerMap.delete(id); }
+      const id=ch.doc.id;
+      if (ch.type==='removed'){
+        const prev=markerMap.get(id);
+        if(prev){ prev.group.removeLayer(prev.marker); markerMap.delete(id); }
         return;
       }
-      const m = { id, ...ch.doc.data() };
-
-      // ✅ 카테고리 정규화(라벨/키 혼용 방지)
-      m.category = resolveCategoryKey(m.category);
-
-      if (Array.isArray(m.pokemon) && !Array.isArray(m.pokemonNorm)) {
-        m.pokemonNorm = m.pokemon.map(normName);
-      }
+      const m={id, ...ch.doc.data()};
+      // 카테고리 레거시 값 정규화 (라벨 저장본도 정상 아이콘 매칭)
+      m.category = normalizeCategoryKey(m.category);
+      if (Array.isArray(m.pokemon) && !Array.isArray(m.pokemonNorm)) m.pokemonNorm = m.pokemon.map(normName);
 
       if (markerMap.has(id)){
-        const prev = markerMap.get(id);
+        const prev=markerMap.get(id);
         prev.group.removeLayer(prev.marker);
         markerMap.delete(id);
       }
       const group = ensureCatGroup(m.category);
-      const mk = L.marker([m.y, m.x], { icon: iconFor(m.category) }).addTo(group);
+      const mk=L.marker([m.y, m.x], { icon: iconFor(m.category) }).addTo(group);
       mk.on('click', ()=>openInfoWithSeq(m));
-      markerMap.set(id, { group, marker: mk, data: m, seq: null, confirmed: LS.load(`pin_confirmed_${id}`, false) });
+      markerMap.set(id, {group, marker: mk, data:m, seq:null, confirmed: LS.load(`pin_confirmed_${id}`, false)});
       applyVisibility(id);
     }
 
@@ -2367,43 +2336,6 @@
     // 초기 1회 적용
     updateEditorsForCategory(catSel.value);
   
-    /* PATCH START: Suggest/Inquiry debounce & auto-close (2025-10-28) */
-    const suggestModal = document.getElementById('suggestModal');
-    const sgEditSave   = document.getElementById('sgEditSave');
-    let __sgLock = false;
-
-    if (sgEditSave){
-      sgEditSave.addEventListener('click', async ()=>{
-        if (__sgLock) return;
-        const last = +LS.load('sg_last_ts', 0);
-        if (Date.now() - last < 4000){ alert('연속 등록은 4초 후에 가능해요.'); return; }
-
-        const titleEl = document.getElementById('sgEditTitle');
-        const bodyEl  = document.getElementById('sgEditBody');
-        const title = (titleEl?.value||'').trim();
-        const body  = (bodyEl?.value||'').trim();
-        if (!title || !body){ alert('제목/내용을 입력해주세요.'); return; }
-        if (!firebaseOk){ alert('오프라인 상태입니다.'); return; }
-
-        __sgLock = true; sgEditSave.disabled = true; sgEditSave.textContent = '등록중…';
-        try{
-          await addDoc(collection(db,'suggestions'), {
-            title, body, uid: me?.uid||null, createdAt: serverTimestamp()
-          });
-          LS.save('sg_last_ts', Date.now());
-          if (titleEl) titleEl.value = '';
-          if (bodyEl)  bodyEl.value  = '';
-          if (suggestModal) suggestModal.style.display = 'none';  // ✅ 자동 닫기
-          alert('건의/문의가 등록되었습니다.');
-        }catch(e){
-          alert('등록 실패: ' + (e?.message||e));
-        }finally{
-          __sgLock = false; sgEditSave.disabled = false; sgEditSave.textContent = '등록';
-        }
-      });
-    }
-    /* PATCH END */
-  
     /* ---------------- 상세 패널 + 캐러셀 + 댓글 ---------------- */
     const $info=document.getElementById('info');
     const $infoTitle=document.getElementById('infoTitle');
@@ -2514,46 +2446,11 @@
       return { nick, rankCode:rank, trust, isAdmin:isAdm };
     }
 
-    /* PATCH START: other profile modal (2025-10-28) */
-    async function openOtherProfile(uid){
-      if (!firebaseOk || !uid){ alert('프로필을 불러올 수 없습니다.'); return; }
-      try{
-        const pfSnap = await getDoc(doc(db,'profiles', uid));
-        const d = pfSnap.exists() ? (pfSnap.data()||{}) : {};
-        document.getElementById('opNick').textContent  = d.nick || '(익명)';
-        document.getElementById('opRank').textContent  = d.rankCode || 'Z';
-        document.getElementById('opTrust').textContent = (d.trust ?? 10);
-        document.getElementById('opXp').textContent    = (d.xp ?? 0);
-        document.getElementById('opViews').textContent = (d.totalViews ?? 0);
-
-        const list = document.getElementById('opAchievementList');
-        const ids = d.achievementsUnlocked || [];
-        if (!ids.length){
-          list.innerHTML = '<div style="opacity:.7">표시할 업적 없음</div>';
-        } else {
-          list.innerHTML = ids.map(id=>{
-            const meta = ACHIEVEMENTS.find(a=>a.id===id);
-            if (!meta) return `<span class="achievement-badge">${esc(id)}</span>`;
-            return `<span class="achievement-badge ${meta.tier}">${esc(meta.name)}</span>`;
-          }).join('');
-      }
-
-        const modal = document.getElementById('otherProfileModal');
-        modal.style.display = 'flex';
-        document.getElementById('opClose').onclick = ()=> (modal.style.display = 'none');
-      }catch(e){
-        alert('프로필 로드 실패: ' + (e?.message||e));
-      }
-    }
-    /* PATCH END */
-  
     function fmtDisplay(nick, rankCode, trust, adm){
       const trustClass = trust < 0 ? 'trust-negative' : 'trust-positive';
       return `${nick} • ${adm ? '관리자' : rankCode} • 신뢰도: <span class="${trustClass}">${trust}</span>`;
     }
 
-    
-  
     function openComments(marker){
       if (!firebaseOk) { $cForm.style.display='none'; $cList.innerHTML=''; return; }
       if (unsubComments){unsubComments();unsubComments=null; }
@@ -2915,110 +2812,20 @@
     }
 
     /* ---------------- 모드 전환 ---------------- */
-    let mode = 'search';
-    const btnSearch = document.getElementById('btnSearch');
-    const btnPlace  = document.getElementById('btnPlace');
-
-    const modalEl = document.getElementById('modal');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const saveBtn   = document.getElementById('saveBtn');
-    let pendingPos  = null;
-    let _placeHandler = null;
-    let _saveWired = false;
-
-    // 모달 열고닫기 안전장치
-    function openCreateModal(){
-      if (!modalEl) return;
-      document.getElementById('mTitle').value = '';
-      document.getElementById('mBody').value  = '';
-      // 기본 카테고리 디폴트 선택(원하면 바꿔도 됨)
-      if (document.getElementById('mCat')) {
-        document.getElementById('mCat').value = document.getElementById('mCat').value || TM_CAT;
-      }
-      modalEl.style.display = 'flex';
-      }
-    function closeCreateModal(){
-      if (!modalEl) return;
-      modalEl.style.display = 'none';
-      pendingPos = null;
-    }
-    if (cancelBtn) cancelBtn.onclick = closeCreateModal;
-
-    // 초기 진입 시 모달 강제 숨김 (접속 시 뜨던 문제 fix)
-    if (modalEl) modalEl.style.display = 'none';
-
+    let mode='search';
+    const btnSearch=document.getElementById('btnSearch');
+    const btnPlace =document.getElementById('btnPlace');
     function setMode(m){
-      mode = m;
-      btnSearch.classList.toggle('on', m === 'search');
-      btnPlace.classList.toggle('on',  m === 'place');
-
-      // 커서 표시
-      map.getContainer().style.cursor = (m === 'place') ? 'crosshair' : '';
-
-      // 이전 핸들러 제거
-      if (_placeHandler){ map.off('click', _placeHandler); _placeHandler = null; }
-
-      if (m === 'place'){
-        _placeHandler = (e)=>{
-          const ll = e.latlng;
-          if (!isInside(ll)){ alert('지도를 벗어난 위치입니다.'); return; }
-          pendingPos = { x: ll.lng, y: ll.lat };
-          openCreateModal();
-        };
-        map.on('click', _placeHandler);
-      }
+      mode=m;
+      btnSearch.classList.toggle('on', m==='search');
+      btnPlace.classList.toggle('on',  m==='place');
+      if (!adminReportMode) side.style.display = (m==='search') ? 'block':'none';
     }
-
-    btnSearch.onclick = ()=> setMode('search');
-    btnPlace.onclick  = ()=> setMode('place');
-
-    // 저장 버튼(중복 방지 + 좌표 필요)
-    if (saveBtn && !_saveWired){
-      _saveWired = true;
-      let saving = false;
-      saveBtn.addEventListener('click', async ()=>{
-        if (saving) return;
-        if (!firebaseOk){ alert('네트워크 차단/오프라인 상태입니다.'); return; }
-        if (!pendingPos){ alert('지도를 클릭해 위치를 먼저 선택하세요.'); return; }
-
-        const title = (document.getElementById('mTitle').value||'').trim();
-        const body  = (document.getElementById('mBody').value||'').trim();
-        const rawCat= (document.getElementById('mCat').value||'').trim();
-        const cat   = resolveCategoryKey(rawCat);
-
-        if (!title){ alert('제목을 입력하세요.'); return; }
-
-        saving = true; saveBtn.disabled = true; saveBtn.textContent = '등록중…';
-        try{
-          const data = {
-            title, body,
-            category: cat,
-            x: pendingPos.x, y: pendingPos.y,
-            status: 'pending',
-            authorUid: me?.uid || null,
-            displayName: me?.displayName || '익명',
-            createdAt: serverTimestamp(),
-            media: []
-          };
-          const r = await addDoc(collection(db,'markers'), data);
-          await safeMergeDoc(['profiles', me?.uid], { pinsCreated: increment(1) });
-          await awardXP('pin');
-
-          closeCreateModal();
-          setMode('search');
-          alert('핀 등록 완료! (검수 대기)');
-
-          // 방금 등록한 핀 정보 패널 열기(로컬로라도)
-          openInfo({ id: r.id, ...data }, null);
-        }catch(e){
-          alert('등록 실패: ' + (e?.message||e));
-        }finally{
-          saving = false; saveBtn.disabled = false; saveBtn.textContent = '등록';
-        }
-      });
-    }
-
-    // 페이지 최초 모드는 검색모드로 고정 (접속 시 모달 뜨던 문제 fix)
+    btnSearch.onclick=()=> setMode('search');
+    btnPlace.onclick =()=> {
+      const msg = '핀 배치모드에서 배치하게 된 핀은 심사를 거쳐 모두에게 공개됩니다.\n신중히, 사실만을 작성하여 주세요.\n\n핀 배치모드로 전환하시겠습니까?';
+      if (confirm(msg)) setMode('place');
+    };
     setMode('search');
 
     /* ---------------- 입력/저장 ---------------- */
@@ -4127,255 +3934,7 @@
 
     console.log('✅ ZA 한글 공략 맵 초기화 완료');
 
-    /* === ZA MAPS PATCH BUNDLE (drop-in) =========================================
-    * 목적: 기존 HTML(동일 문서의 <script type="module">)에 이 블록만 붙여넣으면
-    * - 상단 우측 버튼(공지/건의/메신저) 열기/닫기
-    * - 프로필/신뢰도내역/업적관리/타유저프로필 모달 열기/닫기
-    * - 상세패널 링크복사, 핀 오른쪽-클릭 반응 메뉴
-    * - 검색/핀배치 모드 토글, 단축키, 사이드바 토글
-    * 등이 바로 작동.
-    * 기존 코드(Leaflet/Firebase/각종 유틸)와 충돌 없이 “후킹”만 한다.
-    * 이 코드는 반드시 같은 <script type="module"> 내부 가장 마지막에 삽입.
-    * ========================================================================== */
-
-    (function(){
-      // ----- 안전 헬퍼 -----
-      const $ = (id)=> document.getElementById(id);
-      const qs = (sel, root=document)=> root.querySelector(sel);
-      const qsa = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
-      const on = (el, ev, fn)=> el && el.addEventListener(ev, fn);
-
-      // 기존 스코프 값들 접근 (있으면 사용, 없으면 안전한 기본값)
-      const LS = globalThis.LS || { save:()=>{}, load:()=>null };
-      const map = globalThis.map || null;
-
-      // ----- 모달 공통 -----
-      function showModal(id){ const el=$(id); if(el){ el.style.display='flex'; trapFocus(el); } }
-      function hideModal(id){ const el=$(id); if(el){ el.style.display='none'; releaseFocus(); } }
-      function toggleModal(id){ const el=$(id); if(!el) return; (el.style.display==='flex')?hideModal(id):showModal(id); }
-
-      // 포커스 트랩(접근성)
-      let lastFocus=null;
-      function trapFocus(container){
-      lastFocus = document.activeElement;
-        const focusables = qsa('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])', container)
-         .filter(el=>!el.hasAttribute('disabled'));
-        if (focusables[0]) focusables[0].focus();
-        function loop(e){
-          if(e.key!=='Tab') return;
-          const first = focusables[0], last = focusables[focusables.length-1];
-          if(e.shiftKey && document.activeElement===first){ last.focus(); e.preventDefault(); }
-          else if(!e.shiftKey && document.activeElement===last){ first.focus(); e.preventDefault(); }
-      }
-        container.__trapHandler = loop;
-        container.addEventListener('keydown', loop);
-    }
-      function releaseFocus(){
-        if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
-        qsa('#modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal,#trustHistoryModal,#otherProfileModal,#achievementListModal')
-          .forEach(m=>{
-            if (m.__trapHandler) { m.removeEventListener('keydown', m.__trapHandler); m.__trapHandler=null; }
-          });
-      lastFocus=null;
-      }
-
-      // ----- 상단 우측 버튼: 공지/건의/메신저 -----
-      on($('btnNoticeList'), 'click', ()=> showModal('noticeListModal'));
-      on($('btnSuggestList'), 'click', ()=> showModal('suggestListModal'));
-      on($('btnMsg'),        'click', ()=> showModal('messengerModal'));
-
-      // 공지 목록 닫기/새 공지
-      on($('ntListClose'), 'click', ()=> hideModal('noticeListModal'));
-      on($('ntNew'), 'click', ()=> { hideModal('noticeListModal'); showModal('noticeModal'); });
-
-      // 공지 본문 뷰/닫기
-      on($('noticeClose'), 'click', ()=> hideModal('noticeModal'));
-      on($('noticeDismiss'), 'click', ()=> hideModal('noticeModal'));
-      on($('noticeHide24'), 'click', ()=>{
-        try { LS.save('notice_hide_until', Date.now()+24*3600*1000); }catch{}
-        hideModal('noticeModal');
-      });
-
-      // 건의/문의 목록 닫기 & 작성하기
-      on($('sgListClose'), 'click', ()=> hideModal('suggestListModal'));
-      on($('sgNew'), 'click', ()=> { hideModal('suggestListModal'); showModal('suggestModal'); });
-
-      // 건의/문의 상세 닫기
-      on($('sgClose'), 'click', ()=> hideModal('suggestModal'));
-
-      // 관리자 메신저 닫기
-      on($('msgClose'), 'click', ()=> hideModal('messengerModal'));
-
-      // ----- 프로필/신뢰도/업적/타 유저 프로필 -----
-      on($('btnProfile'), 'click', ()=> showModal('profileModal'));
-      on($('pfClose'), 'click', ()=> hideModal('profileModal'));
-      on($('thClose'), 'click', ()=> hideModal('trustHistoryModal'));
-      on($('pfTrustHistory'), 'click', ()=> showModal('trustHistoryModal'));
-
-      //업적 관리(내)
-      on($('pfManageAchievements'), 'click', ()=> showModal('achievementModal'));
-      on($('achClose'), 'click', ()=> hideModal('achievementModal'));
-
-      // 전체 업적(관리자용 리스트) 모달(있을 때)
-      on($('achListClose'), 'click', ()=> hideModal('achievementListModal'));
-
-      // 타 유저 프로필
-      on($('opClose'), 'click', ()=> hideModal('otherProfileModal'));
-
-      // 미션 모달 (버튼이 별도로 있다면 연결)
-      const btnMissions = $('btnMissions'); // 선택 요소(없으면 무시)
-      if (btnMissions) on(btnMissions, 'click', ()=> showModal('missionsModal'));
-      on($('missionsClose'), 'click', ()=> hideModal('missionsModal'));
-
-      // ----- 사이드바 & 모드 토글 -----
-      const side = $('side');
-      const btnSearch = $('btnSearch');
-      const btnPlace = $('btnPlace');
-
-      function setMode(mode){ // 'search' | 'place'
-        if (!btnSearch || !btnPlace) return;
-        if (mode==='search'){
-          btnSearch.classList.add('on'); btnPlace.classList.remove('on');
-          if (side) side.style.display = 'block';
-        }else{
-          btnPlace.classList.add('on'); btnSearch.classList.remove('on');
-          if (side) side.style.display = 'none';
-        }
-        try { LS.save('ui_mode', mode); }catch{}
-    }
-      // 초기 모드 복원
-      const savedMode = (LS.load('ui_mode','search')||'search');
-      setMode(savedMode);
-
-      on(btnSearch, 'click', ()=> setMode('search'));
-      on(btnPlace,  'click', ()=> setMode('place'));
-
-      // 단축키: S=검색모드, M=핀모드, /=검색 포커스, ESC=모달/상세 닫기
-      on(document, 'keydown', (e)=>{
-        const tag = (e.target && e.target.tagName)||'';
-        const inInput = /INPUT|TEXTAREA|SELECT/.test(tag);
-        if (e.key==='s' || e.key==='S'){ if(!inInput){ e.preventDefault(); setMode('search'); } }
-        if (e.key==='m' || e.key==='M'){ if(!inInput){ e.preventDefault(); setMode('place'); } }
-        if (e.key==='/'){ if(!inInput){ e.preventDefault(); $('qInput')?.focus(); } }
-        if (e.key==='Escape'){
-          // 열려있는 모달/상세 닫기
-          const openMod = qsa('#modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal,#trustHistoryModal,#otherProfileModal,#achievementListModal')
-            .find(el=> el.style.display==='flex');
-          if (openMod) { hideModal(openMod.id); return; }
-          const info = $('info');
-          if (info && info.style.display!=='none'){ qs('#infoClose', info)?.click(); }
-        }
-      });
-
-      // ----- 상세패널: 링크복사 & 핀 반응(right-click) -----
-      const copyBtn = $('copyLinkBtn');
-      if (copyBtn){
-        on(copyBtn, 'click', ()=>{
-          try{
-            const idTag = $('infoId')?.textContent?.trim() || '#-';
-            // currentOpenId는 메인 스크립트에서 유지
-            const mid = (globalThis.currentOpenId || '').trim();
-            const url = new URL(location.href);
-            if (mid) url.searchParams.set('pin', mid);
-            // 보이는 번호만 있는 경우에도 일단 복사
-            navigator.clipboard.writeText(url.toString())
-              .then(()=> alert('링크가 복사되었습니다'))
-              .catch(()=> alert('링크 복사에 실패했습니다'));
-          }catch{
-            alert('클립보드 접근이 차단되었어요');
-          }
-        });
-      }
-
-      // 핀 전체에 대한 반응 메뉴: 상세 상단 영역 우클릭 시
-      const infoPane = $('info');
-      if (infoPane){
-        on(infoPane, 'contextmenu', (e)=>{
-          // 댓글 개별 우클릭은 본문 렌더 쪽에서 이미 처리.
-          // 상세 패널 빈 곳 우클릭 시, 현재 열린 핀에 반응 달기
-          const menu = $('reactionMenu');
-          if (!menu) return;
-          const pinId = globalThis.currentOpenId;
-          if (!pinId) return;
-          e.preventDefault();
-          if (typeof globalThis.showReactionMenu === 'function'){
-            globalThis.showReactionMenu(e.pageX, e.pageY, 'pin', pinId, null);
-          }
-        });
-      }
-
-      // 반응 메뉴 바깥 클릭으로 닫기(보호)
-      const reactionMenu = $('reactionMenu');
-      if (reactionMenu){
-        on(document, 'click', (e)=>{
-          if (reactionMenu.style.display==='block' && !reactionMenu.contains(e.target)){
-            reactionMenu.style.display='none';
-          }
-        });
-      }
-
-      // ----- “공지 24시간 숨김” 적용(있다면) -----
-      try{
-        const until = LS.load('notice_hide_until', 0) || 0;
-        if (Date.now() < until){
-          // 공지 열림을 시도할 때마다 막을 수 있지만,
-          // 여기선 시작 시 목록 모달을 강제로 닫는 정도로 처리
-          const nl = $('noticeListModal'); if (nl) nl.style.display='none';
-          const nv = $('noticeModal'); if (nv) nv.style.display='none';
-        }
-      }catch{}
-
-      // ----- 접근성: 모달 배경 클릭으로 닫기 -----
-      qsa('#modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal,#trustHistoryModal,#otherProfileModal,#achievementListModal')
-        .forEach(m=>{
-          on(m, 'click', (e)=>{ if (e.target===m) hideModal(m.id); });
-        });
-
-      // ----- 사이드: 인기검색어 버튼 키보드 접근성 강화 -----
-      const qTrend = $('qTrending');
-      if (qTrend){
-        qTrend.addEventListener('keydown', (e)=>{
-          const b = e.target.closest('[data-sug]');
-          if (!b) return;
-          if (e.key==='Enter' || e.key===' '){ b.click(); e.preventDefault(); }
-        });
-      }
-
-      // ----- 줌 컨트롤 숨김을 보완하는 축소/확대 단축키(+/-) -----
-      on(document, 'keydown', (e)=>{
-        if (!map) return;
-        if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
-        if (e.key==='+'){ map.zoomIn(); }
-        else if (e.key==='-'){ map.zoomOut(); }
-      });
-
-      // ----- 작은 토스트 유틸(필요시) -----
-      if (typeof globalThis.toast !== 'function'){
-        globalThis.toast = (msg)=>{
-          const t = document.createElement('div');
-          t.textContent = msg;
-          Object.assign(t.style, {
-            position:'fixed', left:'50%', bottom:'24px', transform:'translateX(-50%)',
-            background:'#111c', color:'#fff', padding:'8px 12px', borderRadius:'8px',
-            zIndex: 4000, backdropFilter:'blur(4px)'
-          });
-          document.body.appendChild(t);
-          setTimeout(()=> t.remove(), 1800);
-        };
-      }
-
-      // ----- 안전: showReactionMenu가 없으면 최소 구현 -----
-      if (typeof globalThis.showReactionMenu !== 'function'){
-        globalThis.showReactionMenu = (x,y,type,targetId,parentId)=>{
-          const menu = $('reactionMenu'); if(!menu) return;
-          menu.style.left = x+'px'; menu.style.top = y+'px'; menu.style.display='block';
-          // 선택 처리 자체는 메인 구현(이미 HTML에 존재)에게 맡김
-        };
-      }
-
-      // 끝
-    })();
-    
+  
   </script>
 </body>
-</html>
+  </html>
