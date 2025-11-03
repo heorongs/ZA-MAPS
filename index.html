@@ -941,6 +941,79 @@
      
     // 모듈이 살아서 초기화 끝났음을 안전패치에 알림
     window.__ZA_APP_BOOTED__ = true;
+    
+    // === 최신 공지 자동 팝업 (항상 최신 1개) ===
+    let __ZA_NOTICE_AUTO_OPENED__ = false;
+    const NOTICE_BLOCK_KEY = 'notice_block_until';
+    const NOTICE_BLOCK_MS  = 24 * 3600 * 1000; // "24시간 동안 안뜨게" 유지 시간
+
+    async function openNoticeDoc(n){
+      const $noticeModal = document.getElementById('noticeModal');
+      if (!$noticeModal) return;
+
+      // 보기 모드로 전환
+      const $view = document.getElementById('noticeView');
+      const $edit = document.getElementById('noticeEdit');
+      if ($view) $view.style.display = 'block';
+      if ($edit) $edit.style.display = 'none';
+
+      // 내용 채우기
+      const ts = (typeof toMs === 'function') ? (toMs(n.createdAt) || Date.now()) : Date.now();
+      const fmtDate = new Date(ts).toLocaleString();
+
+      const $title = document.getElementById('noticeTitle');
+      const $body  = document.getElementById('noticeBody');
+      const $date  = document.getElementById('noticeDate');
+      const $vcnt  = document.getElementById('noticeViewCount');
+
+      if ($title) $title.textContent = (n.title || '(제목 없음)');
+      if ($body)  $body.textContent  = (n.body  || '');
+      if ($date)  $date.textContent  = fmtDate;
+      if ($vcnt)  $vcnt.textContent  = `조회 ${n.viewCount || 0}`;
+
+      // 버튼 바인딩 (24시간 안뜨게 / 닫기)
+      const $hide24 = document.getElementById('noticeHide24');
+      const $dismiss= document.getElementById('noticeDismiss');
+      if ($hide24) $hide24.onclick = () => {
+        try { localStorage.setItem(NOTICE_BLOCK_KEY, String(Date.now() + NOTICE_BLOCK_MS)); } catch {}
+        $noticeModal.style.display = 'none';
+      };
+      if ($dismiss) $dismiss.onclick = () => { $noticeModal.style.display = 'none'; };
+
+      // 표시
+      $noticeModal.style.display = 'flex';
+
+      // 조회수 +1 (가능할 때만)
+      try{
+        if (firebaseOk) await updateDoc(doc(db,'notices', n.id), { viewCount: increment(1) });
+      }catch(_e){}
+    }
+
+    async function maybeOpenLatestNoticeOnLoad(){
+      // 이미 다른 코드가 열었으면 중복 방지
+      if (__ZA_NOTICE_AUTO_OPENED__) return;
+
+      // 사용자가 '24시간 동안 안뜨게' 눌러둔 경우는 건너뜀
+      let blockUntil = 0;
+      try { blockUntil = parseInt(localStorage.getItem(NOTICE_BLOCK_KEY) || '0', 10) || 0; } catch {}
+      if (Date.now() < blockUntil) return;
+
+      if (!firebaseOk) return;
+      try{
+        const qs = await getDocs(query(collection(db,'notices'), orderBy('createdAt','desc'), limit(1)));
+        if (qs.empty) return;
+        const d = qs.docs[0];
+        const n = { id: d.id, ...d.data() };
+        if (n.deleted === true) return; // 삭제 표시는 스킵
+        __ZA_NOTICE_AUTO_OPENED__ = true;
+        await openNoticeDoc(n);
+      }catch(e){
+        console.warn('[notice] auto-open failed:', e);
+      }
+    }
+
+    // 앱 부팅 직후 한 번만 시도
+    maybeOpenLatestNoticeOnLoad();
   
     const isInside = (latlng)=> map.getBounds().contains(latlng);
 
