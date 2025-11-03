@@ -36,6 +36,13 @@
       display:none; background:#1c1f27; color:#d6d9e0; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.25);
       padding:12px; overflow:auto;
     }
+    /* 사이드 탭바 */
+    #side .tabbar{
+      display:flex; gap:6px; margin:0 0 8px 0;
+      position:sticky; top:0; padding-bottom:6px;
+      background:#1c1f27; z-index:1;
+    }
+    #side .tabbar .tbtn{ padding:6px 12px }
     #side h3{margin:6px 0 10px 4px; font-size:16px; color:#fff}
     .flt-wrap{display:flex; flex-wrap:wrap; gap:8px}
     .flt{
@@ -47,6 +54,11 @@
     .hr{height:1px; background:#2a3040; margin:12px 0}
     .inp{width:100%; box-sizing:border-box; background:#1117; color:#eef; border:1px solid #303645; border-radius:10px; padding:8px}
     .row{display:flex; gap:8px; align-items:center}
+    
+    .catprog-item { background:#1f2430; border:1px solid #2f3647; border-radius:10px; padding:8px }
+    .catprog-head { display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:6px }
+    .pbar { position:relative; height:8px; background:#2a3040; border-radius:999px; overflow:hidden }
+    .pbar > i { position:absolute; left:0; top:0; bottom:0; width:0%; background:#3d6cff; display:block; transition:width .2s }
 
     /* 신고 관리 모드 전용 리스트 */
     .rlist{display:grid; gap:8px}
@@ -124,15 +136,36 @@
     }
     .reaction-menu button:hover{background:#2a2a2a}
 
-    /* 입력/설정 모달 */
-    #modal,#profileModal,#messengerModal,#noticeModal,#noticeListModal,#suggestModal,#suggestListModal,#achievementModal,#missionsModal{
-      display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500;
+    /* 입력/설정/프로필/공지/건의/업적/미션 등 모든 모달 공통 */
+    #modal,
+    #profileModal,
+    #otherProfileModal,
+    #trustHistoryModal,
+    #messengerModal,
+    #noticeModal,
+    #noticeListModal,
+    #suggestModal,
+    #suggestListModal,
+    #achievementModal,
+    #achievementListModal,
+    #missionsModal,
+    #guideModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0008;
+      align-items: center;
+      justify-content: center;
+      z-index: 1600; /* info(1500)보다 위, 배너(2999) 아래 */
     }
     .panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px; max-height:85vh; overflow:auto}
     .panel.wide{width:min(720px, 96vw)}
     .panel input,.panel textarea,.panel select{width:100%; box-sizing:border-box}
     small.muted{color:#a0a7b4}
 
+    #noticeModal { z-index: 1600; }   /* 공지 보기 모달이 목록보다 위 */
+    #noticeListModal { z-index: 1500; }
+  
     /* XP 바 */
     .xp-bar{
       background:#2a2a2a; border-radius:8px; height:20px; position:relative; overflow:hidden; margin:8px 0
@@ -240,7 +273,7 @@
     <button id="btnProfile" class="tbtn" style="display:none" title="프로필 설정">프로필</button>
     <span id="adminBadge" aria-label="관리자">관리자</span>
     <span style="width:1px;height:20px;background:#2f3545;margin:0 6px"></span>
-    <button id="btnSearch" class="tbtn on" title="검색 모드(S)">검색 모드</button>
+    <button id="btnSearch" class="tbtn" title="검색 모드(S)">검색 모드</button>
     <button id="btnPlace"  class="tbtn" title="핀 배치 모드(M)">핀 배치 모드</button>
     <button id="btnAdminReport" class="tbtn" style="display:none" title="신고 관리 모드">신고 관리 모드</button>
     <button id="btnPendingOnly" class="tbtn" style="display:none" title="승인 대기 핀">승인 대기 핀</button>
@@ -251,13 +284,26 @@
     <button id="btnSuggestList" class="pill-btn" title="건의 및 문의">건의 및 문의</button>
     <button id="btnNoticeList" class="pill-btn" title="공지 목록">공지</button>
     <button id="btnMsg" class="pill-btn" style="display:none" title="관리진 메신저">메세지 <span class="bang" id="msgBang">!</span></button>
+    <button id="btnGuide" class="pill-btn" title="기능 안내">안내</button>  
   </div>
 
   <!-- 좌측 사이드 -->
   <aside id="side" aria-label="검색 사이드바">
+    <!-- === 사이드 탭바 === -->
+    <div id="sideTabbar" class="tabbar" role="tablist" aria-label="사이드 탭">
+      <button id="tabFilter" class="tbtn on" role="tab" aria-selected="true">카테고리 필터</button>
+      <button id="tabProgress" class="tbtn" role="tab" aria-selected="false">카테고리 진행도</button>
+    </div>
+
+    <!-- === 진행도 전용 뷰 === -->
+    <div id="sideProg" style="display:none">
+      <h3>카테고리 진행도</h3>
+      <div id="catProgList" class="rlist"></div>
+    </div>
     <div id="sideCats">
       <h3>카테고리 필터</h3>
       <div class="flt-wrap" id="fltList"></div>
+      
 
       <h3>특수 레이어</h3>
       <div class="flt-wrap">
@@ -653,6 +699,28 @@
       </div>
     </div>
   </div>
+  
+  <!-- 기능 안내 모달 -->
+  <div id="guideModal" style="display:none; position:fixed; inset:0; background:#0008; align-items:center; justify-content:center; z-index:1500">
+    <div class="panel wide">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        기능 안내
+        <span>
+          <button id="gdClose" class="tbtn">닫기</button>
+        </span>
+      </h3>
+      <div id="gdList" style="max-height:60vh;overflow:auto"></div>
+      <div id="gdAdmin" style="display:none; margin-top:10px">
+        <div class="hr"></div>
+        <div style="font-weight:600;margin-bottom:6px">안내 작성(관리자)</div>
+        <input id="gdTitle" class="inp" placeholder="제목">
+        <textarea id="gdBody" class="inp" rows="4" placeholder="내용"></textarea>
+        <div style="text-align:right;margin-top:6px">
+          <button id="gdSave" class="tbtn on">등록</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- 미션 모달 -->
   <div id="missionsModal">
@@ -684,7 +752,36 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="za-safe-patch.js" defer></script>
   <script type="module">
+  
+  // 지도 클릭 시, 'place' 모드에서만 입력 모달 열림 (주석)  ← 이 줄 찾기
+   const $modal = document.getElementById('modal'); // 재사용  ← 이 줄 '바로 아래'에 아래 코드 삽입
+
+  // ---- HARD GUARD: 페이지 로드/복귀 시 모달이 자동으로 열리는 걸 전면 차단 ----
+  let pinModalArmed = false; // 사용자가 '핀 배치 모드'를 누른 뒤에만 true
+  const closePinModal = () => {
+    if ($modal) { 
+      $modal.style.display = 'none';
+      $modal.dataset.openReason = '';
+    }
+  };
+
+  // 누군가(다른 스크립트/유령클릭)가 #modal을 보이게 바꾸면, 무장 전에는 즉시 닫기
+  new MutationObserver(() => {
+    if (!$modal) return;
+    const visible = getComputedStyle($modal).display !== 'none';
+    if (visible && !pinModalArmed) closePinModal();
+  }).observe($modal, { attributes: true, attributeFilter: ['style','class'] });
+
+  // BFCache 복귀/초기 로드시도 확실히 닫기
+  window.addEventListener('DOMContentLoaded', closePinModal);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') closePinModal();
+  });
+  
+   (async () => {
+ 
     /* ---------------- 유틸 ---------------- */
     if (!globalThis.CSS) globalThis.CSS = {};
     if (!CSS.escape) CSS.escape = s => String(s).replace(/["'\\\s]/g, m => '\\' + m);
@@ -709,7 +806,112 @@
       save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} },
       load(k,def){ try{ const v = JSON.parse(localStorage.getItem(k)||'null'); return v==null?def:v; }catch{ return def; } }
     };
+     
+     // (setMode 선언부 ‘바로 위’에 추가)
+    let mode = null;
 
+    // 🚫 초기 자동 오픈 방지용 래치 & 초기 클릭 무시용 타임스탬프
+    const pageBootAt = performance.now();
+    let allowPlaceModal = false; // 사용자가 직접 '핀 배치'를 누른 뒤에만 true
+
+    // 안전: 페이지가 bfcache에서 돌아올 때도 모달 강제 닫기
+    window.addEventListener('pageshow', () => {
+      const mm = document.getElementById('modal');
+      if (mm) mm.style.display = 'none';
+    });
+     
+    /* ---------------- 모드 상태 ---------------- */
+    // 호환용: 외부 스크립트가 setmode()/setMode 호출해도 여기로 연결
+    window.setMode = (next)=>{ 
+      if (_appMode === next) next = null; 
+      _appMode = next; 
+      applyModeUI(); 
+    };
+    window.setmode = window.setMode;  // 소문자 호출도 수용
+    // appMode: null | 'search' | 'place'
+    let _appMode = null;
+    const $btnSearch = document.getElementById('btnSearch');
+    const $btnPlace  = document.getElementById('btnPlace');
+
+    function applyModeUI(){
+      $btnSearch.classList.toggle('on', _appMode === 'search');
+      $btnPlace.classList.toggle('on',  _appMode === 'place');
+      // 사이드패널은 검색/관리모드에서만 보이도록 (기존 로직 유지)
+    }
+
+    function setMode(next){
+      // 같은 버튼 다시 누르면 해제
+      if (_appMode === next) next = null;
+      _appMode = next;
+      applyModeUI();
+    }
+
+    $btnSearch.addEventListener('click', ()=> setMode('search'));
+    $btnPlace.addEventListener('click', () => {
+      setMode('place');
+      allowPlaceModal = true; // 첫 클릭 1회 허용
+      pinModalArmed = true;   // 사용자 무장(arm) — 이 상태에서만 모달 개방 허용
+    });
+
+    
+
+   
+  
+    /* ---------------- 건의/문의 (Suggest) ---------------- */
+    const $sgListModal = document.getElementById('suggestListModal');
+    const $sgModal = document.getElementById('suggestModal');
+    const $sgEdit  = document.getElementById('sgEdit');
+    const $sgView  = document.getElementById('sgView');
+    const $sgEditTitle = document.getElementById('sgEditTitle');
+    const $sgEditBody  = document.getElementById('sgEditBody');
+    const $sgEditSave  = document.getElementById('sgEditSave');
+    const $sgEditCancel= document.getElementById('sgEditCancel');
+    const $sgClose     = document.getElementById('sgClose');
+    const $btnSuggestList = document.getElementById('btnSuggestList');
+
+    $btnSuggestList.onclick = ()=>{ $sgListModal.style.display='flex'; };
+
+    document.getElementById('sgListClose').onclick = ()=>{ $sgListModal.style.display='none'; };
+    document.getElementById('sgNew').onclick = ()=>{
+      if (!me){ alert('로그인이 필요합니다'); return; }
+      $sgEditTitle.value = ''; $sgEditBody.value = '';
+      $sgView.style.display='none'; $sgEdit.style.display='block';
+      $sgListModal.style.display='none';
+      $sgModal.style.display='flex';
+    };
+
+    $sgEditCancel.onclick = ()=>{ $sgModal.style.display='none'; };
+    // 저장 시 중복 등록 방지 + 저장 후 모달 닫기 (버그④ fix)
+    $sgEditSave.onclick = async ()=>{
+      if (!firebaseOk || !me) { alert('로그인이 필요합니다'); return; }
+      const t = ($sgEditTitle.value||'').trim();
+      const b = ($sgEditBody.value||'').trim();
+      if (!t || !b) { alert('제목/내용을 입력하세요'); return; }
+      try{
+        $sgEditSave.disabled = true; $sgEditSave.textContent = '등록중…';
+        await addDoc(collection(db,'suggestions'), {
+          uid: me.uid, title:t, body:b, createdAt: serverTimestamp(), deleted:false
+        });
+        // 미션/업적 갱신(선택)
+        await safeMergeDoc(['profiles', me.uid], { suggestionsMade: increment(1) });
+        await checkAchievements(me.uid);
+        // 닫기
+        $sgModal.style.display='none';
+      } catch(e){
+        alert('등록 실패: ' + (e?.message||e));
+      } finally{
+        $sgEditSave.disabled=false; $sgEditSave.textContent = '등록';
+      }
+    };
+
+    // (관리자) 상세보기에서 삭제 (기능④)
+    async function adminDeleteSuggestion(docId){
+      if (!isAdmin) return;
+      await updateDoc(doc(db,'suggestions', docId), { deleted:true });
+      alert('삭제되었습니다.');
+      $sgModal.style.display='none';
+    }
+  
     /* ---------------- Leaflet ---------------- */
     const IMG_URL = "za_world_map_clean_fixed.png";
     const IMG_W = 2048, IMG_H = 2048;
@@ -722,8 +924,59 @@
     const bounds = [[0,0],[IMG_H,IMG_W]];
     L.imageOverlay(IMG_URL, bounds).addTo(map);
     map.fitBounds(bounds);
+  
+    // ----- 초기 세이프가드: 혹시 열려 있으면 전부 닫기 -----
+    (() => {
+      const ids = [
+        'modal','profileModal','otherProfileModal','trustHistoryModal',
+        'messengerModal','noticeModal','noticeListModal','suggestModal',
+        'suggestListModal','achievementModal','achievementListModal',
+        'missionsModal','guideModal'
+      ];
+      ids.forEach(id=>{
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+    })();
+     
+    // 모듈이 살아서 초기화 끝났음을 안전패치에 알림
+    window.__ZA_APP_BOOTED__ = true;
+  
     const isInside = (latlng)=> map.getBounds().contains(latlng);
 
+    // 지도 클릭 시, 'place' 모드에서만 입력 모달 열림 (버그① 방지)
+    const $modal = document.getElementById('modal'); // 재사용
+     
+   
+    
+     
+    map.on('click', (e)=>{
+      // ✅ 1) 배치 모드가 아니면 금지
+      if (_appMode !== 'place') return;
+
+      // ✅ 2) 사용자가 '핀 배치'를 누른 뒤 첫 클릭만 허용
+      if (!allowPlaceModal) return;
+
+      // ✅ 3) 초기 로드 후 800ms 이내에 들어온 유령 클릭 무시
+      if (performance.now() - pageBootAt < 800) return;
+
+      // ✅ 4) 진짜 사용자 이벤트만 허용 (스크립트 트리거 차단)
+      if (!e?.originalEvent?.isTrusted) return;
+
+      // ✅ 5) 안전 체크
+      if (!$modal) return;
+
+      // 통과 → 모달 열기
+      $modal.style.display = 'flex';
+      globalThis._lastClickLatLng = e.latlng;
+
+      // 한 번 열렸으면 다시 수동으로 눌러야만 또 열리게
+      allowPlaceModal = false;
+        
+      
+      
+    });
+  
     map.createPane('wildPane');
     map.getPane('wildPane').style.zIndex = 450;
     map.getPane('wildPane').style.pointerEvents = 'none';
@@ -832,15 +1085,65 @@
     const ITEM_CATS = ['아이템-중요 아이템', '아이템-포켓몬 볼', '아이템-회복 아이템', '아이템-보물', '아이템-기타 아이템'];
     
     const catSel = document.getElementById('mCat');
+       
+    // 카테고리 키 <-> 라벨 정규화
+    const CAT_BY_KEY   = new Map(CATEGORIES.map(c => [c.key, c]));
+    const KEY_BY_LABEL = new Map(CATEGORIES.map(c => [c.label, c.key]));
+
+    function resolveCatKey(raw){
+      if (!raw) return raw;
+      if (CAT_BY_KEY.has(raw)) return raw;               // 이미 키면 통과
+      const viaLabel = KEY_BY_LABEL.get(String(raw).trim());
+      return viaLabel || raw;                             // 라벨이면 키로 변환
+    }
+  
+    /* 마커 입력폼: 카테고리에 따라 보조 에디터 표시 */
+    const $tmEditor     = document.getElementById('tmEditor');
+    const $megaEditor   = document.getElementById('megaEditor');
+    const $missionEditor= document.getElementById('missionEditor');
+    const $itemEditor   = document.getElementById('itemEditor');
+    const $pkEditor     = document.getElementById('pkEditor');
+
+    function updateEditorsForCategory(catKey){
+      const isTM      = (catKey === TM_CAT);
+      const isMega    = (catKey === MEGA_STONE_CAT);
+      const isMission = MISSION_CATS.includes(catKey);
+      const isItem    = ITEM_CATS.includes(catKey);
+      const allowPk   = POKEMON_CATS.includes(catKey);
+
+      $tmEditor.style.display      = isTM ? 'block':'none';
+      $megaEditor.style.display    = isMega ? 'block':'none';
+      $missionEditor.style.display = isMission ? 'block':'none';
+      $itemEditor.style.display    = isItem ? 'block':'none';
+      $pkEditor.style.display      = allowPk ? 'block':'none';
+    }
+
+    catSel.addEventListener('change', ()=> updateEditorsForCategory(catSel.value));
+    // 모달 열릴 때도 현재 선택값으로 반영되도록
+    updateEditorsForCategory(catSel.value||CATEGORIES[0]?.key);
+  
     catSel.innerHTML = CATEGORIES.map(c=>`<option value="${c.key}">${c.label}</option>`).join('');
 
     const categoryIconOverride = new Map();
+    
     if (firebaseOk){
       onSnapshot(collection(db,'categories'), snap=>{
         categoryIconOverride.clear();
-        snap.forEach(d=>{ const v=d.data()?.iconUrl; if (v) categoryIconOverride.set(d.id, v); });
-      });
-    }
+        snap.forEach(d=>{
+          const v = d.data()?.iconUrl;
+          if (v) categoryIconOverride.set(d.id, v);
+        });
+
+        // 아이콘 즉시 갱신
+        function refreshAllMarkerIcons(){
+          markerMap.forEach((rec)=>{
+            try{ rec.marker.setIcon(iconFor(rec.data.category)); }catch(_e){}
+          });
+        }
+    refreshAllMarkerIcons();
+  });
+}
+     
     const labelFor=(key)=> CATEGORIES.find(c=>c.key===key)?.label || key;
     const defaultIconFor=(key)=>{
       const def = CATEGORIES.find(c=>c.key===key)?.defaultIcon;
@@ -1185,7 +1488,10 @@
 
     /* ---------------- 아이콘 캐시 ---------------- */
     const iconCache = new Map();
-    function iconUrlForCat(cat){ return categoryIconOverride.get(cat) || defaultIconFor(cat); }
+    function iconUrlForCat(cat){
+      const key = resolveCatKey(cat);
+      return categoryIconOverride.get(key) || defaultIconFor(key);
+    }
     function iconFor(cat){
       const url = iconUrlForCat(cat);
       const key = `${url}|32x42`;
@@ -1216,13 +1522,13 @@
       const g = ensureCatGroup(key);
       if (visible) { if (!map.hasLayer(g)) g.addTo(map); }
       else { if (map.hasLayer(g)) map.removeLayer(g); }
+
       const btn = document.querySelector(`.flt[data-cat="${CSS.escape(key)}"]`);
-      if (btn){ 
-        btn.classList.toggle('on', visible);
-        updateCategoryProgress(key);
-      }
+      if (btn){ btn.classList.toggle('on', visible); }
+
       applyAllVisibility();
       recomputeSeqs();
+      updateAllCategoryProgress(); // ✅ 추가
     }
     
     function updateCategoryProgress(catKey){
@@ -1254,6 +1560,91 @@
       else { if (map.hasLayer(wildLayer)) map.removeLayer(wildLayer); }
       document.getElementById('fltWild').classList.toggle('on', v);
     }
+  
+    function recomputeConfirmedByCategory(){
+      // localStorage에 저장된 각 핀의 확인상태를 전체 스캔
+      const countByCat = new Map();
+      markerMap.forEach((rec)=>{
+        const cat = rec.data.category;
+        const confirmed = LS.load(`pin_confirmed_${rec.data.id}`, false) || rec.confirmed;
+        if (confirmed){
+          countByCat.set(cat, (countByCat.get(cat)||0) + 1);
+        }
+      });
+      catConfirmed.clear();
+      countByCat.forEach((v,k)=> catConfirmed.set(k,v));
+    }
+
+    function updateAllCategoryProgress(){
+      recomputeConfirmedByCategory();
+      CATEGORIES.forEach(c=> updateCategoryProgress(c.key));
+    }
+       
+    function computeProgressMap(){
+      const totalByCat = new Map();
+      const confByCat  = new Map();
+
+      // 총합(approved만) & 확인 개수(LS 기준)
+      markerMap.forEach(rec => {
+        const cat = resolveCatKey(rec.data.category);
+        if (rec.data.status === 'approved'){
+          totalByCat.set(cat, (totalByCat.get(cat)||0) + 1);
+        }
+        const conf = LS.load(`pin_confirmed_${rec.data.id}`, false) || rec.confirmed;
+        if (conf){
+          confByCat.set(cat, (confByCat.get(cat)||0) + 1);
+        }
+      });
+
+      // CATEGORIES 기준으로 모두 채워 반환
+      const res = CATEGORIES.map(c => {
+        const k = c.key;
+        const t = totalByCat.get(k)||0;
+        const v = confByCat.get(k)||0;
+        const p = t>0 ? Math.round(v/t*100) : 0;
+        return { key:k, label:c.label, total:t, confirmed:v, percent:p };
+      });
+      return res;
+    }
+
+    function renderCategoryProgressPanel(){
+      const list = document.getElementById('catProgList');
+      if (!list) return;
+
+      // 1) 진행도 데이터 확보 (CATEGORIES 순서 유지)
+      const rowsByKey = new Map();
+      computeProgressMap().forEach(r => rowsByKey.set(r.key, r));
+
+      // 2) 현재 필터 상태: 켜진(=선택된) 카테고리 먼저, 꺼진 카테고리는 아래쪽
+      const selectedKeys   = CATEGORIES.filter(c => catVisible.get(c.key) !== false).map(c => c.key);
+      const unselectedKeys = CATEGORIES.filter(c => catVisible.get(c.key) === false).map(c => c.key);
+
+      // 3) CATEGORIES 기본 순서를 유지한 채로 그룹화 렌더
+      const selectedRows   = selectedKeys.map(k => rowsByKey.get(k));
+      const unselectedRows = unselectedKeys.map(k => rowsByKey.get(k));
+
+      const itemHTML = (r)=> `
+        <div class="catprog-item">
+          <div class="catprog-head">
+            <div>${esc(r.label)}</div>
+            <div style="opacity:.8">${r.confirmed}/${r.total} (${r.percent}%)</div>
+          </div>
+          <div class="pbar"><i style="width:${r.percent}%"></i></div>
+        </div>
+  `   ;
+
+      list.innerHTML = [
+        selectedRows.map(itemHTML).join(''),
+        unselectedRows.length ? `<div class="hr"></div><div style="opacity:.8;margin:4px 0 6px 4px;font-size:12px">비선택 카테고리</div>` : '',
+        unselectedRows.map(itemHTML).join(''),
+      ].join('');
+    }
+
+    // 기존 함수 보완: 내부 버튼 텍스트 갱신 로직 사용하지 않고 패널만 갱신
+    function updateAllCategoryProgress(){
+      recomputeConfirmedByCategory();  // (유지: 내부 집계도 업데이트)
+      renderCategoryProgressPanel();   // ✅ 새 패널 갱신
+    }
 
     // 좌측 필터 UI
     const side = document.getElementById('side');
@@ -1281,7 +1672,9 @@
     };
 
     function buildFilters(){
-      fltList.innerHTML = CATEGORIES.map(c=>`<button class="flt ${catVisible.get(c.key)!==false?'on':''}" data-cat="${c.key}">${c.label}<div class="progress">0%</div></button>`).join('');
+      fltList.innerHTML = CATEGORIES.map(c =>
+        `<button class="flt ${catVisible.get(c.key)!==false?'on':''}" data-cat="${c.key}">${c.label}</button>`
+      ).join('');
       fltList.onclick = (e)=>{
         const b = e.target.closest('.flt[data-cat]');
         if (!b) return;
@@ -1307,11 +1700,48 @@
       };
     }
     buildFilters();
+    // === 사이드 탭 전환 ===
+    const sideTabbar      = document.getElementById('sideTabbar');
+    const tabFilterBtn    = document.getElementById('tabFilter');
+    const tabProgressBtn  = document.getElementById('tabProgress');
+    const sideProg        = document.getElementById('sideProg');
+
+    function showSideTab(tab){
+      const cur = (tab==='progress' ? 'progress' : 'filter');
+      LS.save('sideTab', cur);
+      // 표시/비표시
+      sideCats.style.display  = (cur==='filter')   ? 'block' : 'none';
+      sideProg.style.display  = (cur==='progress') ? 'block' : 'none';
+      // 버튼 상태
+      tabFilterBtn.classList.toggle('on', cur==='filter');
+      tabFilterBtn.setAttribute('aria-selected', cur==='filter' ? 'true':'false');
+      tabProgressBtn.classList.toggle('on', cur==='progress');
+      tabProgressBtn.setAttribute('aria-selected', cur==='progress' ? 'true':'false');
+
+      // 진행도 탭 들어올 때 즉시 갱신
+      if (cur==='progress') renderCategoryProgressPanel();
+    }
+
+    // 초기 탭 (기본: 필터)
+    showSideTab(LS.load('sideTab','filter'));
+
+    tabFilterBtn.onclick   = ()=> showSideTab('filter');
+    tabProgressBtn.onclick = ()=> showSideTab('progress');
 
     function setAdminReportMode(v){
       adminReportMode = !!v;
       side.style.display = 'block';
       sideCats.style.display = adminReportMode ? 'none' : 'block';
+      // 탭바/진행도 뷰도 함께 토글
+      if (sideTabbar){
+        sideTabbar.style.display = adminReportMode ? 'none' : 'flex';
+      }
+      if (adminReportMode){
+        sideProg.style.display = 'none';
+      } else {
+        // 관리자모드 해제 시, 마지막 탭 상태 복원
+        showSideTab(LS.load('sideTab','filter'));
+      }
       sideReports.style.display = adminReportMode ? 'block' : 'none';
       document.getElementById('btnAdminReport').classList.toggle('on', adminReportMode);
       applyAllVisibility();
@@ -1744,9 +2174,8 @@
       }
     }
 
-    function updateAllCategoryProgress(){
-      CATEGORIES.forEach(c=> updateCategoryProgress(c.key));
-    }
+    
+    
 
     function renderChange(ch){
       const id=ch.doc.id;
@@ -1769,6 +2198,8 @@
       markerMap.set(id, {group, marker: mk, data:m, seq:null, confirmed: LS.load(`pin_confirmed_${id}`, false)});
       applyVisibility(id);
     }
+       
+    
 
     function isHiddenByReport(m){ return toMs(m.hiddenUntil) > nowMs(); }
     
@@ -2095,7 +2526,7 @@
       // 카테고리 진행도 업데이트
       const cat = rec.data.category;
       if (!catConfirmed.has(cat)) catConfirmed.set(cat, 0);
-      catConfirmed.set(cat, catConfirmed.get(cat) + (rec.confirmed ? 1 : -1));
+      updateAllCategoryProgress();
       updateCategoryProgress(cat);
       
       // 업적 체크
@@ -2202,6 +2633,7 @@
       });
 
       $cSubmit.onclick = async ()=>{
+        if (!(await ensureNotBanned())) return;
         if (!me) { alert('로그인 후 작성할 수 있어요.'); return; }
         const body = ($cBody.value||'').trim();
         if (!body) return;
@@ -2261,7 +2693,10 @@
     }
 
     async function openInfo(m, seqNum){
-      currentOpenId=m.id;
+      currentOpenId = m.id;
+      // 🔧 패널을 실제로 보이게:
+      $info.style.display = 'block';
+    // ... 이하 기존 코드 유지
       
       // ✅ 조회수 증가
       await incrementViewCount(m.id);
@@ -2495,14 +2930,17 @@
     }
 
     /* ---------------- 모드 전환 ---------------- */
-    let mode='search';
+    
     const btnSearch=document.getElementById('btnSearch');
     const btnPlace =document.getElementById('btnPlace');
     function setMode(m){
-      mode=m;
-      btnSearch.classList.toggle('on', m==='search');
-      btnPlace.classList.toggle('on',  m==='place');
-      if (!adminReportMode) side.style.display = (m==='search') ? 'block':'none';
+      mode = m;
+      // DOM 아직 준비 전이면 조용히 빠져나오기
+      if (!btnSearch || !btnPlace || !side) return;
+
+      btnSearch.classList.toggle('on', m === 'search');
+      btnPlace.classList.toggle('on', m === 'place');
+      if (!adminReportMode) side.style.display = (m === 'search') ? '' : 'none';
     }
     btnSearch.onclick=()=> setMode('search');
     btnPlace.onclick =()=> {
@@ -2560,26 +2998,36 @@
      
 
     let pending=null;
-    map.on('click', (e)=>{
-      if (mode!=='place') return;
-      if(!me){ alert('로그인 후 등록할 수 있어요.'); return; }
-      if(!isInside(e.latlng)){ alert('맵 바깥에는 등록할 수 없습니다'); return; }
-      pending=e.latlng;
-      t.value=''; b.value=''; imgsInp.value=''; videoInp.value='';
-      tmNumber.value=''; tmName.value=''; megaPokemon.value=''; missionNumber.value=''; itemName.value='';
-      pkList=[]; redrawPkChips();
-      if (!catSel.value) catSel.value=CATEGORIES[0].key;
-      
-      const cat = catSel.value;
-      pkEditor.style.display = POKEMON_CATS.includes(cat) ? 'block' : 'none';
-      tmEditor.style.display = cat === TM_CAT ? 'block' : 'none';
-      megaEditor.style.display = cat === MEGA_STONE_CAT ? 'block' : 'none';
-      missionEditor.style.display = MISSION_CATS.includes(cat) ? 'block' : 'none';
-      itemEditor.style.display = ITEM_CATS.includes(cat) ? 'block' : 'none';      
-      modal.style.display='flex';
+    map.on('click', (e) => {
+      // 1) 배치 모드 아닐 때 금지
+      if (_appMode !== 'place') return;
+
+      // 2) 사용자 무장(핀 배치 버튼 클릭) 상태가 아닐 때 금지
+      if (!pinModalArmed) return;
+
+      // 3) 첫 클릭 1회만 허용 (더블/유령 방지)
+      if (!allowPlaceModal) return;
+
+      // 4) 초기 로드 800ms 내 유령 클릭 차단
+      if (performance.now() - pageBootAt < 800) return;
+
+      // 5) 진짜 사용자 입력만 허용
+      if (!e?.originalEvent?.isTrusted) return;
+
+      // 모달 열기 (정상 흐름)
+      if ($modal) {
+        $modal.style.display = 'flex';
+        $modal.dataset.openReason = 'user';
+      }
+      globalThis._lastClickLatLng = e.latlng;
+
+      // 1회 소비: 다음엔 버튼을 다시 눌러야 함
+      allowPlaceModal = false;
+      pinModalArmed = false;
     });
 
     document.getElementById('saveBtn').onclick = async () => {
+      if (!(await ensureNotBanned())) return;
       if (!me || !pending) return;
       if (!firebaseOk) { alert('네트워크 차단으로 저장 불가'); return; }
 
@@ -2804,20 +3252,110 @@
     pfTrustHistory.onclick = ()=> openTrustHistory();
     pfManageAchievements.onclick = ()=> openAchievementManagement();
 
-    /* ====== 타 유저 프로필 모달 ====== */
-    const otherProfileModal = document.getElementById('otherProfileModal');
-    const opNick = document.getElementById('opNick');
-    const opRank = document.getElementById('opRank');
-    const opTrust = document.getElementById('opTrust');
-    const opXp = document.getElementById('opXp');
-    const opViews = document.getElementById('opViews');
-    const opAchievementList = document.getElementById('opAchievementList');
-    const opClose = document.getElementById('opClose');
-    
-    
-    
-    opClose.onclick = ()=> otherProfileModal.style.display='none';
-    otherProfileModal.addEventListener('click', (e)=>{ if(e.target===otherProfileModal) otherProfileModal.style.display='none'; });
+    /* ---------------- 타 유저 프로필 ---------------- */
+    const $otherProfile = document.getElementById('otherProfileModal');
+    const $opNick  = document.getElementById('opNick');
+    const $opRank  = document.getElementById('opRank');
+    const $opTrust = document.getElementById('opTrust');
+    const $opXp    = document.getElementById('opXp');
+    const $opViews = document.getElementById('opViews');
+    const $opAchList = document.getElementById('opAchievementList');
+    const $opClose = document.getElementById('opClose');
+
+    $opClose.onclick = ()=>{ $otherProfile.style.display='none'; };
+
+    async function openOtherProfile(uid){
+      try{
+        const pf = await getDoc(doc(db,'profiles', uid));
+        const d  = pf.exists() ? (pf.data()||{}) : {};
+        $opNick.textContent  = d.nick || '익명';
+        $opRank.textContent  = d.rankCode || 'Z';
+        $opTrust.textContent = (d.trust !== undefined ? d.trust : 10);
+        $opXp.textContent    = d.xp || 0;
+        $opViews.textContent = d.totalViews || 0;
+
+        const achs = d.achievementsUnlocked || [];
+        $opAchList.innerHTML = achs.length ? achs.map(id=>`<span class="achievement-badge">${esc(id)}</span>`).join('') : '<span style="opacity:.7">없음</span>';
+
+        // 관리자용: 작성 핀/댓글 열람 + 밴 UI
+        let adminHtml = '';
+        if (isAdmin){
+          adminHtml = `
+            <div class="hr"></div>
+            <div style="font-weight:600;margin:6px 0">관리자 도구</div>
+            <div class="row" style="align-items:stretch">
+              <button class="tbtn" id="opLoadPins">작성 핀 보기</button>
+              <button class="tbtn" id="opLoadComments">작성 댓글 보기</button>
+            </div>
+            <div id="opAdminList" style="max-height:240px;overflow:auto;margin-top:6px"></div>
+            <div class="hr"></div>
+            <div>밴 적용</div>
+            <div class="row">
+              <input id="banHours" class="inp" type="number" min="1" placeholder="시간(예: 24)" style="width:120px">
+              <input id="banReason" class="inp" placeholder="사유(선택)">
+              <button class="tbtn warn" id="applyBanBtn">밴 적용</button>
+              <button class="tbtn" id="clearBanBtn">밴 해제</button>
+            </div>
+          `;
+         }
+        // 관리자 블럭을 모달 하단에 동적으로 붙이기
+        const container = document.createElement('div');
+        container.innerHTML = adminHtml;
+        const old = $otherProfile.querySelector('.__adminBlock');
+        if (old) old.remove();
+        container.className = '__adminBlock';
+        $otherProfile.querySelector('.panel').appendChild(container);
+
+        if (isAdmin){
+          const $list = $otherProfile.querySelector('#opAdminList');
+          $otherProfile.querySelector('#opLoadPins').onclick = async ()=>{
+            $list.innerHTML = '불러오는 중…';
+            const qPins = query(collection(db,'markers'), where('authorUid','==', uid), limit(100));
+            const s = await getDocs(qPins);
+            $list.innerHTML = s.empty ? '<div style="opacity:.7">핀 없음</div>'
+              : s.docs.map(d=>`<div style="border-bottom:1px solid #333;padding:6px 4px">#${d.id.slice(0,6)} · ${esc(d.data().title||'(제목 없음)')} · ${labelFor(d.data().category)}</div>`).join('');
+          };
+          $otherProfile.querySelector('#opLoadComments').onclick = async ()=>{
+            $list.innerHTML = '불러오는 중…';
+            const qC = query(collectionGroup(db,'comments'), where('uid','==', uid), limit(100));
+            const s = await getDocs(qC);
+            $list.innerHTML = s.empty ? '<div style="opacity:.7">댓글 없음</div>'
+              : s.docs.map(d=>`<div style="border-bottom:1px solid #333;padding:6px 4px">${esc(d.data().body||'(본문 없음)')}</div>`).join('');
+          };
+          $otherProfile.querySelector('#applyBanBtn').onclick = async ()=>{
+            const hours = +($otherProfile.querySelector('#banHours').value||0);
+            const reason = ($otherProfile.querySelector('#banReason').value||'').trim();
+            if (!hours || hours<=0){ alert('시간을 입력하세요'); return; }
+            const until = new Date(Date.now() + hours*3600*1000);
+            await setDoc(doc(db,'bans', uid), { until, reason, by: me?.uid||null, createdAt: serverTimestamp() });
+            alert(`밴 적용: ${hours}시간`);
+          };
+          $otherProfile.querySelector('#clearBanBtn').onclick = async ()=>{
+            await deleteDoc(doc(db,'bans', uid));
+            alert('밴 해제됨');
+          };
+        }
+
+        $otherProfile.style.display='flex';
+      }catch(e){
+        alert('프로필을 불러오지 못했습니다: ' + (e?.message||e));
+      }
+    }
+
+    // 행동 전 밴 체크 (댓글/핀 등록 전에 호출해서 막기)
+    async function ensureNotBanned(){
+      if (!firebaseOk || !me) return true;
+      try{
+        const s = await getDoc(doc(db,'bans', me.uid));
+        if (!s.exists()) return true;
+        const untilMs = toMs(s.data().until);
+        if (untilMs && untilMs > Date.now()){
+          alert('현재 제한 상태입니다. 만료 후 이용해주세요.');
+          return false;
+        }
+        return true;
+      }catch{ return true; }
+    }
 
     /* ====== 신뢰도 내역 모달 ====== */
     const trustHistoryModal = document.getElementById('trustHistoryModal');
@@ -3208,6 +3746,42 @@
 
     setTimeout(autoPopupLatestNotice, 1200);
 
+    /* ---------------- 기능 안내(Guide) ---------------- */
+    const $btnGuide = document.getElementById('btnGuide');
+    const $guideModal = document.getElementById('guideModal');
+    const $gdClose = document.getElementById('gdClose');
+    const $gdList = document.getElementById('gdList');
+    const $gdAdmin = document.getElementById('gdAdmin');
+    const $gdTitle = document.getElementById('gdTitle');
+    const $gdBody  = document.getElementById('gdBody');
+    const $gdSave  = document.getElementById('gdSave');
+
+    $btnGuide.onclick = async ()=>{
+      $guideModal.style.display='flex';
+      $gdAdmin.style.display = isAdmin ? 'block' : 'none';
+      await refreshGuideList();
+    };    
+    $gdClose.onclick = ()=>{ $guideModal.style.display='none'; };
+
+    async function refreshGuideList(){
+      if (!firebaseOk){ $gdList.innerHTML=''; return; }
+      const s = await getDocs(query(collection(db,'guides'), orderBy('createdAt','desc'), limit(50)));
+      $gdList.innerHTML = s.empty ? '<div style="opacity:.7">안내 없음</div>'
+        : s.docs.map(d=>{
+            const x=d.data()||{};
+            return `<div class="sys-notice"><h4>${esc(x.title||'(제목 없음)')}</h4><p>${esc(x.body||'')}</p></div>`;
+          }).join('');
+    }
+    $gdSave.onclick = async ()=>{
+      if (!isAdmin) return;
+      const t = ($gdTitle.value||'').trim();
+      const b = ($gdBody.value||'').trim();
+      if (!t || !b){ alert('제목/내용을 입력하세요'); return; }
+      await addDoc(collection(db,'guides'), { title:t, body:b, createdAt: serverTimestamp(), authorUid: me?.uid||null });
+      $gdTitle.value=''; $gdBody.value='';
+      await refreshGuideList();
+    };
+  
     /* ====== 건의 및 문의 시스템 ====== */
     const btnSuggestList = document.getElementById('btnSuggestList');
     const suggestListModal = document.getElementById('suggestListModal');
@@ -3648,6 +4222,11 @@
   }
 
   // ----- 상단 우측 버튼: 공지/건의/메신저 -----
+  
+  // 공지 리스트 항목 클릭 핸들러 내부(공지 열기 직전)에 추가:
+  document.getElementById('noticeListModal').style.display='none';
+  document.getElementById('noticeModal').style.display='flex';
+  
   on($('btnNoticeList'), 'click', ()=> showModal('noticeListModal'));
   on($('btnSuggestList'), 'click', ()=> showModal('suggestListModal'));
   on($('btnMsg'),        'click', ()=> showModal('messengerModal'));
@@ -3842,9 +4421,12 @@
   }
 
   // 끝
-})();
-    
+      })();
+      
+    })().catch(e => (window.__ZA_SAFE_ERR ? window.__ZA_SAFE_ERR(e) : console.error(e)));
+     
   </script>
 </body>
 </html>
+
 
