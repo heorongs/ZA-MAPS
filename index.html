@@ -156,7 +156,7 @@
       background: #0008;
       align-items: center;
       justify-content: center;
-      z-index: 1600; /* info(1500)보다 위, 배너(2999) 아래 */
+      z-index: 1700; /* info(1500)보다 위, 배너(2999) 아래 */
     }
     .panel{background:#1e1e1e;color:#fff;padding:16px;border-radius:12px;width:380px; max-height:85vh; overflow:auto}
     .panel.wide{width:min(720px, 96vw)}
@@ -242,6 +242,19 @@
     }
   </style>
 </head>
+  <!-- Firebase guard START -->
+  <script>
+    // 전역 플래그 (항상 먼저 선언)
+    window.firebaseOk = false;
+
+    // Firebase 준비 신호 Promise (정의 먼저!)
+    window.waitForFirebase = () =>
+      new Promise((resolve) => {
+        if (window.firebaseOk) return resolve();
+        document.addEventListener('firebase-ready', () => resolve(), { once: true });
+      });
+  </script>
+  <!-- Firebase guard END -->
 <body>
   <!-- 외부 스크립트 차단 경고 -->
   <div id="blockWarn" style="display:none;position:fixed;inset:0;background:#000a;z-index:3000;
@@ -840,9 +853,11 @@
     }
 
     function setMode(next){
-      // 같은 버튼 다시 누르면 해제
       if (_appMode === next) next = null;
       _appMode = next;
+      // ↓↓↓ 추가: 새/구 로직 모두 만족
+      pinModalArmed = (_appMode === 'place');                 // 하드가드 무장 상태 동기화
+      if (globalThis.state) state.pinMode = (_appMode === 'place'); // 구 로직 호환
       applyModeUI();
     }
 
@@ -1012,42 +1027,44 @@
       }
     }
 
-    // 앱 부팅 직후 한 번만 시도
-    maybeOpenLatestNoticeOnLoad();
+    
   
     const isInside = (latlng)=> map.getBounds().contains(latlng);
 
-    // 지도 클릭 시, 'place' 모드에서만 입력 모달 열림 (버그① 방지)
-    const $modal = document.getElementById('modal'); // 재사용
+    
      
    
     
      
-    map.on('click', (e)=>{
-      // ✅ 1) 배치 모드가 아니면 금지
-      if (_appMode !== 'place') return;
+    // [PIN] 맵 클릭 핸들러 (L1035~1065 사이)
+    map.off('click.__pin');
+    map.on('click.__pin', (e) => {
+      const loggedIn = !!(window.firebaseAuth && firebaseAuth.currentUser);
+      console.log('map click', state.selectedCategory, state.pinMode, e.originalEvent?.timeStamp || Date.now(), loggedIn);
 
-      // ✅ 2) 사용자가 '핀 배치'를 누른 뒤 첫 클릭만 허용
-      if (!allowPlaceModal) return;
+      // 핀 배치 모드 체크(신/구 로직 + 하드가드)
+      const placing = (_appMode === 'place') || (!!globalThis.state && state.pinMode === true);
+      if (!placing || !pinModalArmed) return;
 
-      // ✅ 3) 초기 로드 후 800ms 이내에 들어온 유령 클릭 무시
-      if (performance.now() - pageBootAt < 800) return;
+      // 로그인 필요 시 여기서 안내하고 종료
+      if (!loggedIn) {
+        toast?.('로그인이 필요합니다. 상단 [Google 로그인]을 눌러주세요.');
+        return;
+      }
 
-      // ✅ 4) 진짜 사용자 이벤트만 허용 (스크립트 트리거 차단)
-      if (!e?.originalEvent?.isTrusted) return;
+      // 카테고리 없으면 선택 유도(모달 막지 말고 명확히 안내)
+      if (!state.selectedCategory) {
+        toast?.('먼저 카테고리를 선택해주세요');
+        document.querySelector('#categoryBar')?.classList.add('shake'); // 선택 바가 있으면 강조
+        return;
+      }
 
-      // ✅ 5) 안전 체크
-      if (!$modal) return;
-
-      // 통과 → 모달 열기
-      $modal.style.display = 'flex';
-      globalThis._lastClickLatLng = e.latlng;
-
-      // 한 번 열렸으면 다시 수동으로 눌러야만 또 열리게
-      allowPlaceModal = false;
-        
+      const pickedCat = (globalThis.state && state.selectedCategory) || (catSel?.value);
+      if (!pickedCat) { toast?.('먼저 카테고리를 선택해주세요'); return; }
+      openPinModal({ lat, lng, category: pickedCat });
       
-      
+      const { lat, lng } = e.latlng;
+      openPinModal({ lat, lng, category: state.selectedCategory });
     });
   
     map.createPane('wildPane');
@@ -1060,7 +1077,7 @@
     let adminReportMode = false;
 
     /* ---------------- Firebase ---------------- */
-    let firebaseOk = true;
+    window.firebaseOk = false;
     let app, auth, db, st;
     let GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged;
     let collection, collectionGroup, addDoc, serverTimestamp, onSnapshot,
@@ -1074,15 +1091,8 @@
         import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
         import("https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js"),
       ]);
-      const firebaseConfig = {
-        apiKey: "AIzaSyCam7y7qNINoxBlTeGx7CDlP8Y77pXFMWA",
-        authDomain: "za-maps-32982.firebaseapp.com",
-        projectId: "za-maps-32982",
-        storageBucket: "za-maps-32982.appspot.com",
-        messagingSenderId: "804333155537",
-        appId: "1:804333155537:web:504bc3ee175e3678bc81f0",
-        measurementId: "G-GTRK8JEZFM"
-      };
+
+      const firebaseConfig = { /* 너의 기존 config 그대로 */ };
       app = appMod.initializeApp(firebaseConfig);
       auth = authMod.getAuth(app);
       db   = fsMod.getFirestore(app);
@@ -1090,10 +1100,24 @@
       ({ GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } = authMod);
       ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit, arrayUnion, arrayRemove } = fsMod);
       ({ ref, getDownloadURL, uploadBytesResumable, uploadBytes } = stMod);
+
+      // ✅ 이제 준비 완료 신호 내보내기
+      window.firebaseOk = true;
+      document.dispatchEvent(new Event('firebase-ready'));
+
+      // ✅ 이제야 getDocs 사용 가능: 공지 자동 오픈 호출은 여기로 이동
+      maybeOpenLatestNoticeOnLoad();
+
     } catch (e) {
-      firebaseOk = false;
+      window.firebaseOk = false;
       console.warn("[Firebase] 동적 import 실패 — 오프라인 모드", e);
     }
+     
+    
+
+    // 위 맵 클릭 핸들러의 loggedIn 계산을 아래로 바꿔도 됨:
+    const isUserLoggedIn = () => DEV_ALLOW_PIN_WITHOUT_LOGIN ? true :
+      !!(window.firebaseAuth && window.firebaseAuth.currentUser);
 
     /* ---------------- 업로드 유틸 ---------------- */
     async function safeMergeDoc(pathArr, data){
@@ -3097,6 +3121,20 @@
       // 1회 소비: 다음엔 버튼을 다시 눌러야 함
       allowPlaceModal = false;
       pinModalArmed = false;
+    });
+     
+    // 모달 재무장: 취소/저장 시 다시 한 번 클릭 허용
+    const $cancelBtn = document.getElementById('cancelBtn');
+    const $saveBtn   = document.getElementById('saveBtn');
+
+    $cancelBtn?.addEventListener('click', () => {
+      // 기존에 닫는 로직이 따로 있어도 상관없음 — 허용만 다시 켜주면 됨
+      allowPlaceModal = true;
+    });
+
+    $saveBtn?.addEventListener('click', () => {
+      // 저장 후에도 다음 클릭 한 번은 바로 열리도록
+      allowPlaceModal = true;
     });
 
     document.getElementById('saveBtn').onclick = async () => {
