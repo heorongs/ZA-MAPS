@@ -1017,8 +1017,7 @@
   
     const isInside = (latlng)=> map.getBounds().contains(latlng);
 
-    // 지도 클릭 시, 'place' 모드에서만 입력 모달 열림 (버그① 방지)
-    const $modal = document.getElementById('modal'); // 재사용
+    
      
    
     
@@ -1026,25 +1025,14 @@
     map.on('click', (e)=>{
       // ✅ 1) 배치 모드가 아니면 금지
       if (_appMode !== 'place') return;
-
-      // ✅ 2) 사용자가 '핀 배치'를 누른 뒤 첫 클릭만 허용
-      if (!allowPlaceModal) return;
-
-      // ✅ 3) 초기 로드 후 800ms 이내에 들어온 유령 클릭 무시
+      // 첫 로드 직후 유령 클릭 방지
       if (performance.now() - pageBootAt < 800) return;
-
-      // ✅ 4) 진짜 사용자 이벤트만 허용 (스크립트 트리거 차단)
+      // 사용자 실제 클릭만 허용
       if (!e?.originalEvent?.isTrusted) return;
-
-      // ✅ 5) 안전 체크
       if (!$modal) return;
 
-      // 통과 → 모달 열기
       $modal.style.display = 'flex';
       globalThis._lastClickLatLng = e.latlng;
-
-      // 한 번 열렸으면 다시 수동으로 눌러야만 또 열리게
-      allowPlaceModal = false;
         
       
       
