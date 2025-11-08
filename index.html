@@ -587,7 +587,7 @@
       </h3>
       <div id="chatBox" class="chat-wrap"></div>
       <div class="row" style="margin-top:8px">
-        <input id="msgInput" class="inp" placeholder="메세지 입력…" />
+        <input id="msgInput" class="inp" placeholder="메세지 입력..." />
         <button id="msgSend" class="tbtn on">보내기</button>
       </div>
       <div style="font-size:12px;opacity:.75;margin-top:6px">* 내가 보낸 메세지는 좌측, 다른 관리자가 보낸 메세지는 우측에 표시됩니다.</div>
@@ -751,13 +751,35 @@
     </div>
   </div>
 
+  
+  
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="za-safe-patch.js" defer></script>
   <script type="module">
   
-  // 지도 클릭 시, 'place' 모드에서만 입력 모달 열림 (주석)  ← 이 줄 찾기
-   const $modal = document.getElementById('modal'); // 재사용  ← 이 줄 '바로 아래'에 아래 코드 삽입
+  // Firebase handles (single source of truth)
+  let firebaseOk = false;
+  let app, auth, db, st; // storage까지 한 번에
+  
+  
+  
+  // modal id 호환: #pinModal 우선, 없으면 #modal 사용
+  const getPinModal = () => document.getElementById('pinModal') || document.getElementById('modal');
+  let $modal = getPinModal();
 
+  function openPinModal(reason='map-click'){
+    if (!$modal) return;
+    // 우리가 의도로 연 것임을 표시 (Observer가 닫지 않게)
+    $modal.dataset.openReason = reason;
+    pinModalArmed = true; // 안전망 (외부 스크립트가 건드려도 안 닫히게)
+    $modal.style.display = 'flex';
+    // 접근성/편의: 제목 포커스
+    setTimeout(()=> document.getElementById('mTitle')?.focus(), 0);
+  }
+  function isModalVisible(){
+    return $modal && getComputedStyle($modal).display !== 'none';
+  } 
+  
   // ---- HARD GUARD: 페이지 로드/복귀 시 모달이 자동으로 열리는 걸 전면 차단 ----
   let pinModalArmed = false; // 사용자가 '핀 배치 모드'를 누른 뒤에만 true
   const closePinModal = () => {
@@ -767,13 +789,26 @@
     }
   };
 
-  // 누군가(다른 스크립트/유령클릭)가 #modal을 보이게 바꾸면, 무장 전에는 즉시 닫기
+  // 의도된 오픈만 통과: reason='map-click' | 'user' 일 때는 닫지 않음
   new MutationObserver(() => {
     if (!$modal) return;
-    const visible = getComputedStyle($modal).display !== 'none';
-    if (visible && !pinModalArmed) closePinModal();
+    const visible = isModalVisible();
+    const reason = $modal.dataset.openReason || '';
+    if (visible && !pinModalArmed && reason !== 'map-click' && reason !== 'user') {
+      closePinModal();
+    }
   }).observe($modal, { attributes: true, attributeFilter: ['style','class'] });
 
+  // [FIX markerId undefined — utils]
+  const newId = () =>
+    'pin_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+
+  function attachMarkerId(marker, id = newId()) {
+    marker.zaId = id;                 // 커스텀 필드
+    if (marker.options) marker.options.zaId = id; // 혹시 options로도 접근할 때 대비
+    return id;
+  }
+  
   // BFCache 복귀/초기 로드시도 확실히 닫기
   window.addEventListener('DOMContentLoaded', closePinModal);
   document.addEventListener('visibilitychange', () => {
@@ -807,7 +842,7 @@
       load(k,def){ try{ const v = JSON.parse(localStorage.getItem(k)||'null'); return v==null?def:v; }catch{ return def; } }
     };
      
-     // (setMode 선언부 ‘바로 위’에 추가)
+     // (setMode 선언부 '바로 위'에 추가)
     let mode = null;
 
     // 🚫 초기 자동 오픈 방지용 래치 & 초기 클릭 무시용 타임스탬프
@@ -888,7 +923,7 @@
       const b = ($sgEditBody.value||'').trim();
       if (!t || !b) { alert('제목/내용을 입력하세요'); return; }
       try{
-        $sgEditSave.disabled = true; $sgEditSave.textContent = '등록중…';
+        $sgEditSave.disabled = true; $sgEditSave.textContent = '등록중...';
         await addDoc(collection(db,'suggestions'), {
           uid: me.uid, title:t, body:b, createdAt: serverTimestamp(), deleted:false
         });
@@ -911,6 +946,136 @@
       alert('삭제되었습니다.');
       $sgModal.style.display='none';
     }
+
+    // === 건의/문의 목록 렌더 ===
+    const $sgListWrap = document.getElementById('sgListWrap');
+    let unsubSuggestList = null;
+
+    function openSuggestListSubscribe(){
+      if (!firebaseOk) return;
+      if (unsubSuggestList){ unsubSuggestList(); unsubSuggestList = null; }
+      const qS = query(
+        collection(db,'suggestions'),
+        where('deleted','==', false),
+        orderBy('createdAt','desc')
+      );
+      unsubSuggestList = onSnapshot(qS, snap=>{
+        const rows = [];
+        snap.forEach(d=>{
+          const s = d.data() || {};
+          rows.push({ id:d.id, title:s.title||'(제목 없음)', body:s.body||'', createdAt: toMs(s.createdAt)||Date.now(), uid:s.uid||null });
+        });
+        $sgListWrap.innerHTML = rows.map(r => `
+          <div class="ritem" data-sgid="${r.id}" style="cursor:pointer">
+            <div style="font-weight:600">${esc(r.title)}</div>
+            <div style="font-size:12px;opacity:.8;margin-top:4px">${new Date(r.createdAt).toLocaleString()}</div>
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:6px;opacity:.9">${esc(r.body)}</div>
+          </div>
+        `).join('');
+      }, err=>{
+        console.warn('[suggestions] list subscribe failed', err);
+        $sgListWrap.innerHTML = '<div style="opacity:.7">목록을 불러오지 못했습니다.</div>';
+      });
+    }
+
+    // 목록 카드 클릭 → 상세 열기
+    $sgListWrap?.addEventListener('click', (e)=>{
+      const card = e.target.closest('[data-sgid]'); if (!card) return;
+      openSuggestion(card.getAttribute('data-sgid'));
+    });
+
+    // 목록 모달이 열릴 때 구독 시작
+    document.getElementById('btnSuggestList')?.addEventListener('click', ()=>{
+      $sgListModal.style.display='flex';
+      openSuggestListSubscribe();
+    });
+    
+    // === 건의/문의 상세 + 관리자 답변 ===
+    const $sgTitle   = document.getElementById('sgTitle');
+    const $sgBody    = document.getElementById('sgBody');
+    const $sgDate    = document.getElementById('sgDate');
+    const $sgReplies = document.getElementById('sgReplies');
+    const $sgReplyForm   = document.getElementById('sgReplyForm');
+    const $sgReplyBody   = document.getElementById('sgReplyBody');
+    const $sgReplySubmit = document.getElementById('sgReplySubmit');
+
+    let currentSgId = null;
+    let currentSgOwnerUid = null;
+    let unsubSgReplies = null;
+
+    async function openSuggestion(docId){
+      if (!firebaseOk) { alert('네트워크 불가'); return; }
+      currentSgId = docId;
+      // 문서 로드
+      const sRef = doc(db,'suggestions', docId);
+      const sSnap = await getDoc(sRef);
+      if (!sSnap.exists()){
+        alert('삭제되었거나 없는 글입니다.');
+        return;
+      }
+      const d = sSnap.data() || {};
+      currentSgOwnerUid = d.uid || null;
+
+      // 보기 모드 on
+      $sgEdit.style.display = 'none';
+      $sgView.style.display = 'block';
+      $sgListModal.style.display='none';
+      $sgModal.style.display='flex';
+
+      // 본문 채우기
+      $sgTitle.textContent = d.title || '(제목 없음)';
+      $sgBody.textContent  = d.body || '';
+      $sgDate.textContent  = new Date(toMs(d.createdAt)||Date.now()).toLocaleString();
+
+      // ✅ 관리자라면 답변 폼 보이기, 아니면 숨김
+      $sgReplyForm.style.display = isAdmin ? 'block' : 'none';
+      $sgReplyBody.value = '';
+
+      // 답변 목록 실시간 구독
+      if (unsubSgReplies){ unsubSgReplies(); unsubSgReplies=null; }
+      const qR = query(collection(db,'suggestions', docId, 'replies'), orderBy('createdAt','asc'));
+      unsubSgReplies = onSnapshot(qR, snap=>{
+        const items = [];
+        snap.forEach(r=>{
+          const v = r.data() || {};
+          items.push({ id:r.id, body:v.body||'', createdAt: toMs(v.createdAt)||Date.now(), adminUid: v.adminUid||null });
+        });
+
+        // 표시 규칙: 관리자 또는 글쓴이만 실제 내용, 그 외에는 "숨겨진 댓글입니다"
+        const canSee = (isAdmin || (me && currentSgOwnerUid && me.uid===currentSgOwnerUid));
+
+        $sgReplies.innerHTML = items.map(it => `
+          <div class="citem">
+            <div class="meta" style="font-size:12px;opacity:.8">${new Date(it.createdAt).toLocaleString()} · 관리자 답변</div>
+            <div style="white-space:pre-wrap;margin-top:6px">
+              ${ canSee ? esc(it.body) : '<span class="badge-hidden">숨겨진 댓글입니다</span>' }
+            </div>
+          </div>
+        `).join('');
+      }, err=>{
+        console.warn('[replies] subscribe failed', err);
+        $sgReplies.innerHTML = '<div style="opacity:.7">답변을 불러오지 못했습니다.</div>';
+      });
+    }
+
+    // 관리자 답변 등록
+    $sgReplySubmit?.addEventListener('click', async ()=>{
+      if (!firebaseOk) return;
+      if (!isAdmin){ alert('관리자만 답변할 수 있습니다.'); return; }
+      const body = ($sgReplyBody.value||'').trim();
+      if (!body){ alert('답변 내용을 입력해 주세요.'); return; }
+      try{
+        await addDoc(collection(db,'suggestions', currentSgId, 'replies'), {
+          body, createdAt: serverTimestamp(), adminUid: me?.uid || null
+        });
+        $sgReplyBody.value = '';
+        // 선택: 메신저 알림/배지 등은 여기서 추가 가능
+      }catch(e){
+        alert('답변 등록 실패: ' + (e?.message||e));
+      }
+    });
+
+
   
     /* ---------------- Leaflet ---------------- */
     const IMG_URL = "za_world_map_clean_fixed.png";
@@ -921,6 +1086,45 @@
       maxZoom: 4,
       zoomControl: false  // ✅ 줌 컨트롤 제거
     });
+     
+    // 지도 클릭 → 가드 무시하고 강제 모달 오픈 (디버그 플래그가 켜졌을 때만)
+    (function forceOpenModal() {
+      if (!window.map || !window.ZA_GUARDS_OFF) return;
+      map.on('click', (e) => {
+        console.info('[GUARDS_OFF] map click at', e.latlng);
+
+        // 우리 프로젝트의 정식 오픈 함수가 있으면 그걸 사용
+        if (typeof window.openPinModal === 'function') {
+          try {
+            // 좌표는 전역에 저장되어 elsewhere에서 소비하므로 그대로 유지
+            globalThis._lastClickLatLng = e.latlng;
+            window.openPinModal('map-click');
+            return;
+          } catch (err) { console.warn(err); }
+        }
+
+        // Fallback: 기존 호환 헬퍼 사용 (#pinModal 없으면 #modal 사용)
+        const m = (typeof getPinModal === 'function')
+          ? getPinModal()
+          : (document.getElementById('pinModal') || document.getElementById('modal') ||
+            document.querySelector('dialog#pinModal, .pin-modal'));
+
+        if (m) {
+          m.dataset.openReason = 'map-click';
+          m.style.display = 'flex';
+          // 접근성: 제목 포커스
+          setTimeout(()=> document.getElementById('mTitle')?.focus(), 0);
+          // 좌표 입력 필드가 있으면 채우기(선택)
+          (document.getElementById('pinLat')||{}).value = e.latlng?.lat ?? '';
+          (document.getElementById('pinLng')||{}).value = e.latlng?.lng ?? '';
+        } else {
+          // 더 이상 경고창 띄우지 않음 — 디버그 콘솔만
+          console.warn('pin modal not found: tried #pinModal / #modal / .pin-modal');
+        }
+      });
+    })();
+
+     
     const bounds = [[0,0],[IMG_H,IMG_W]];
     L.imageOverlay(IMG_URL, bounds).addTo(map);
     map.fitBounds(bounds);
@@ -1022,20 +1226,15 @@
    
     
      
-    map.on('click', (e)=>{
-      // ✅ 1) 배치 모드가 아니면 금지
+    map.on('click', (e) => {
       if (_appMode !== 'place') return;
-      // 첫 로드 직후 유령 클릭 방지
       if (performance.now() - pageBootAt < 800) return;
-      // 사용자 실제 클릭만 허용
       if (!e?.originalEvent?.isTrusted) return;
       if (!$modal) return;
 
-      $modal.style.display = 'flex';
+      pinModalArmed = true;              // 의도된 오픈 플래그
+      openPinModal('map-click');         // Observer 통과용 이유 세팅
       globalThis._lastClickLatLng = e.latlng;
-        
-      
-      
     });
   
     map.createPane('wildPane');
@@ -1048,8 +1247,7 @@
     let adminReportMode = false;
 
     /* ---------------- Firebase ---------------- */
-    let firebaseOk = true;
-    let app, auth, db, st;
+    
     let GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged;
     let collection, collectionGroup, addDoc, serverTimestamp, onSnapshot,
         orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit, arrayUnion, arrayRemove;
@@ -1078,6 +1276,11 @@
       ({ GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } = authMod);
       ({ collection, collectionGroup, addDoc, serverTimestamp, onSnapshot, orderBy, query, doc, updateDoc, deleteDoc, where, getDocs, getDoc, setDoc, increment, limit, arrayUnion, arrayRemove } = fsMod);
       ({ ref, getDownloadURL, uploadBytesResumable, uploadBytes } = stMod);
+      
+      
+      
+      firebaseOk = true;
+      
     } catch (e) {
       firebaseOk = false;
       console.warn("[Firebase] 동적 import 실패 — 오프라인 모드", e);
@@ -1096,7 +1299,7 @@
       const path  = `${folder}/${uid}/${fname}`;
       const r     = ref(st, path);
       try{
-        onProgress?.(`${label}…`);
+        onProgress?.(`${label}...`);
         await uploadBytes(r, file);
         return await getDownloadURL(r);
       }catch(e1){
@@ -1105,7 +1308,7 @@
       const task = uploadBytesResumable(r, file);
       await new Promise((resolve, reject)=>{
         task.on('state_changed',
-          s=> onProgress?.(`${label}… ${Math.round(s.bytesTransferred/s.totalBytes*100)}%`),
+          s=> onProgress?.(`${label}... ${Math.round(s.bytesTransferred/s.totalBytes*100)}%`),
           reject, resolve);
       });
       return await getDownloadURL(r);
@@ -1384,6 +1587,19 @@
       return `${nick||'익명'} • ${isAdminFlag ? '관리자' : (rankCode||'Z')}${trustStr}`;
     }
 
+    // 위치: ensureProfileOnLogin 정의 "위" 또는 "바로 아래"
+    function openProfile(initial = false){
+      const m = document.getElementById('profileModal');
+      if (!m) return;
+      m.style.display = 'flex';
+      // 닫기 버튼 배선(한 번만)
+      const closeBtn = document.getElementById('pfClose');
+      if (closeBtn && !closeBtn.__wired){
+        closeBtn.__wired = true;
+        closeBtn.addEventListener('click', ()=> m.style.display = 'none');
+      }
+    } 
+     
     async function ensureProfileOnLogin(){
       if (!firebaseOk || !me) return;
       const pfRef = doc(db,'profiles', me.uid);
@@ -1434,6 +1650,8 @@
       subscribeMarkers();
       subscribeReportedCommentsAdmin();
       wireAdminMessenger();
+      // 위치: function applyAdminUI() { ... } 내부 마지막 줄 근처
+      if (typeof wireAdminMessenger === 'function') wireAdminMessenger();
     }
 
     if (firebaseOk){
@@ -1636,9 +1854,11 @@
       countByCat.forEach((v,k)=> catConfirmed.set(k,v));
     }
 
+    // 위치: 두 함수 중 "나중에 나오는" updateAllCategoryProgress를 아래로 교체
     function updateAllCategoryProgress(){
-      recomputeConfirmedByCategory();
-      CATEGORIES.forEach(c=> updateCategoryProgress(c.key));
+      recomputeConfirmedByCategory();       // 내부 집계
+      CATEGORIES.forEach(c=> updateCategoryProgress(c.key)); // 칩 % 갱신
+      renderCategoryProgressPanel();        // 패널 갱신
     }
        
     function computeProgressMap(){
@@ -1701,11 +1921,7 @@
       ].join('');
     }
 
-    // 기존 함수 보완: 내부 버튼 텍스트 갱신 로직 사용하지 않고 패널만 갱신
-    function updateAllCategoryProgress(){
-      recomputeConfirmedByCategory();  // (유지: 내부 집계도 업데이트)
-      renderCategoryProgressPanel();   // ✅ 새 패널 갱신
-    }
+    
 
     // 좌측 필터 UI
     const side = document.getElementById('side');
@@ -1838,13 +2054,24 @@
       } else {
         warningUserList.innerHTML = warning.map(w=>`
           <div style="background:#2a2a2a; padding:6px; margin:4px 0; border-radius:6px">
-            ${esc(w.nick)} (${w.uid.slice(0,8)}…)<br>
+            ${esc(w.nick)} (${w.uid.slice(0,8)}...)<br>
             <span style="opacity:.8">${esc(w.reason)}</span>
           </div>
         `).join('');
       }
     }
-
+     
+    // 위치: "/* ---------------- 통합 검색 ---------------- */" 블록 바로 위나 내부 최상단
+    function matchText(m){
+      if (!textFilter) return true;
+      const hay = [
+        m?.title || '',
+        m?.body || '',
+        Array.isArray(m?.pokemon) ? m.pokemon.join(' ') : ''
+      ].join(' ').toLowerCase();
+      return hay.includes(textFilter);
+    } 
+     
     /* ---------------- 통합 검색 ---------------- */
     const qInput   = document.getElementById('qInput');
     const qSearch  = document.getElementById('qSearch');
@@ -2086,7 +2313,7 @@
         const bodySafe = rc && rc.body ? rc.body : '(본문 없음)';
         return `
           <div class="ritem" data-mid="${esc(rc?.markerId||'')}" data-cid="${esc(cidSafe)}" data-adminproxy="${esc(rc?.adminProxyId||'')}">
-            <div style="font-weight:600">#${midSafe}… · 댓글</div>
+            <div style="font-weight:600">#${midSafe}... · 댓글</div>
             <div style="white-space:pre-wrap;margin-top:6px">${esc(bodySafe)}</div>
             <div class="meta">${esc(statusTextOf(rc||{}))}</div>
             <div class="act">
@@ -2210,6 +2437,14 @@
       }
     }
 
+    // 위치: subscribeMarkers 정의 "바로 위" 등
+    function tryOpenDeepLink(){
+      const id = new URLSearchParams(location.hash.slice(1)).get('id');
+      if (id && markerMap.has(id)){
+        openInfoWithSeq(markerMap.get(id).data);
+      }
+    } 
+     
     function subscribeMarkers(){
       if (!firebaseOk) return;
       if (unsubMain){unsubMain();} if (unsubPending){unsubPending();}
@@ -2239,24 +2474,43 @@
     
 
     function renderChange(ch){
-      const id=ch.doc.id;
-      if (ch.type==='removed'){
-        const prev=markerMap.get(id);
-        if(prev){ prev.group.removeLayer(prev.marker); markerMap.delete(id); }
+      const id = ch.doc.id;
+
+      if (ch.type === 'removed'){
+        const prev = markerMap.get(id);
+        if (prev){ prev.group.removeLayer(prev.marker); markerMap.delete(id); }
         return;
       }
-      const m={id, ...ch.doc.data()};
-      if (Array.isArray(m.pokemon) && !Array.isArray(m.pokemonNorm)) m.pokemonNorm = m.pokemon.map(normName);
+
+      const m = { id, ...ch.doc.data() };
+      if (Array.isArray(m.pokemon) && !Array.isArray(m.pokemonNorm)) {
+        m.pokemonNorm = m.pokemon.map(normName);
+      }
 
       if (markerMap.has(id)){
-        const prev=markerMap.get(id);
+        const prev = markerMap.get(id);
         prev.group.removeLayer(prev.marker);
         markerMap.delete(id);
       }
+  
       const group = ensureCatGroup(m.category);
-      const mk=L.marker([m.y, m.x], { icon: iconFor(m.category) }).addTo(group);
-      mk.on('click', ()=>openInfoWithSeq(m));
-      markerMap.set(id, {group, marker: mk, data:m, seq:null, confirmed: LS.load(`pin_confirmed_${id}`, false)});
+
+      // ✅ lat/lng 준비 (숫자 보장)
+      const latlng = L.latLng(+m.y, +m.x);
+
+      // ✅ 마커는 한 번만 만든다
+      const mk = L.marker(latlng, { icon: iconFor(m.category) }).addTo(group);
+
+      mk.on('click', () => openInfoWithSeq(m));
+
+      markerMap.set(id, {
+        group,
+        marker: mk,
+        data: m,
+        seq: null,
+        confirmed: LS.load(`pin_confirmed_${id}`, false)
+      });
+
       applyVisibility(id);
     }
        
@@ -2652,12 +2906,12 @@
             }
           }catch(_e){}
           const disp = await getDisplayForUid(c.uid);
-          const reactions = await loadReactions('comment', c.id, marker.id);
+          const reactions = await loadReactions('comment', c.id, m.id);
           return { ...c, _repCnt: cnt, _disp: disp, _reactions: reactions };
         }));
 
         $cList.innerHTML = items.map(c => `
-          <div class="citem ${c._hidden?'inactive':''}" id="c-${c.id}" oncontextmenu="event.preventDefault(); showReactionMenu(event.pageX, event.pageY, 'comment', '${c.id}', '${marker.id}'); return false;">
+          <div class="citem ${c._hidden?'inactive':''}" id="c-${c.id}" oncontextmenu="event.preventDefault(); showReactionMenu(event.pageX, event.pageY, 'comment', '${c.id}', '${m.id}'); return false;">
             <div class="meta">
               <span class="clickable" data-uid="${c.uid}">${fmtDisplay(c._disp.nick, c._disp.rankCode, c._disp.trust, c._disp.isAdmin)}</span> · ${new Date(toMs(c.createdAt||Date.now())).toLocaleString()}
               ${c._repCnt>0 ? `<span class="badge-report">신고 ${c._repCnt}</span>`:''}
@@ -3085,6 +3339,9 @@
       // 1회 소비: 다음엔 버튼을 다시 눌러야 함
       allowPlaceModal = false;
       pinModalArmed = false;
+      // 위치: map.on('click', (e)=> { ... $modal.style.display = 'flex'; ... }) 내부
+      $modal.dataset.openReason = 'map-click';
+      pinModalArmed = true;  
     });
 
     document.getElementById('saveBtn').onclick = async () => {
@@ -3115,7 +3372,7 @@
 
         const thumbUrl = media.length ? media[0].url : null;
 
-        setBtn('저장 중…');
+        setBtn('저장 중...');
         const inPkCat = POKEMON_CATS.includes(catSel.value);
         const markerData = {
           x: pending.lng, y: pending.lat,
@@ -3370,14 +3627,14 @@
         if (isAdmin){
           const $list = $otherProfile.querySelector('#opAdminList');
           $otherProfile.querySelector('#opLoadPins').onclick = async ()=>{
-            $list.innerHTML = '불러오는 중…';
+            $list.innerHTML = '불러오는 중...';
             const qPins = query(collection(db,'markers'), where('authorUid','==', uid), limit(100));
             const s = await getDocs(qPins);
             $list.innerHTML = s.empty ? '<div style="opacity:.7">핀 없음</div>'
               : s.docs.map(d=>`<div style="border-bottom:1px solid #333;padding:6px 4px">#${d.id.slice(0,6)} · ${esc(d.data().title||'(제목 없음)')} · ${labelFor(d.data().category)}</div>`).join('');
           };
           $otherProfile.querySelector('#opLoadComments').onclick = async ()=>{
-            $list.innerHTML = '불러오는 중…';
+            $list.innerHTML = '불러오는 중...';
             const qC = query(collectionGroup(db,'comments'), where('uid','==', uid), limit(100));
             const s = await getDocs(qC);
             $list.innerHTML = s.empty ? '<div style="opacity:.7">댓글 없음</div>'
@@ -3690,7 +3947,11 @@
       currentNoticeId = id;
       
       // ✅ 조회수 증가
-      await safeMergeDoc(['markers', markerId], { viewCount: increment(1) });
+      try {
+        await safeMergeDoc(['notices', id], { viewCount: increment(1) });
+      } catch (e) {
+        console.warn('[viewCount increment denied]', e);
+      }
       
       noticeEdit.style.display='none';
       noticeView.style.display='block';
@@ -3712,9 +3973,17 @@
         document.getElementById('ntEdit').onclick = ()=> editNotice(id, v);
         document.getElementById('ntDel').onclick = async ()=>{
           if (!confirm('이 공지를 삭제할까요?')) return;
-          await deleteDoc(doc(db,'notices', id));
-          noticeModal.style.display='none';
-          renderNoticeList();
+          try {
+            await deleteDoc(doc(db,'notices', id));
+            noticeModal.style.display='none';
+            renderNoticeList();
+          } catch (e) {
+            if (e?.code === 'permission-denied') {
+              alert('삭제 권한이 없습니다. 관리자 권한 및 Firestore 규칙을 확인하세요.');
+            } else {
+              alert('삭제 중 오류: ' + (e?.message || e));
+            }
+          }
         };
       } else {
         noticeAdminBtns.innerHTML = '';
@@ -4237,7 +4506,7 @@
  * - 상세패널 링크복사, 핀 오른쪽-클릭 반응 메뉴
  * - 검색/핀배치 모드 토글, 단축키, 사이드바 토글
  * 등이 바로 작동.
- * 기존 코드(Leaflet/Firebase/각종 유틸)와 충돌 없이 “후킹”만 한다.
+ * 기존 코드(Leaflet/Firebase/각종 유틸)와 충돌 없이 "후킹”만 한다.
  * 이 코드는 반드시 같은 <script type="module"> 내부 가장 마지막에 삽입.
  * ========================================================================== */
 
@@ -4422,7 +4691,7 @@
     });
   }
 
-  // ----- “공지 24시간 숨김” 적용(있다면) -----
+  // ----- "공지 24시간 숨김" 적용(있다면) -----
   try{
     const until = LS.load('notice_hide_until', 0) || 0;
     if (Date.now() < until){
@@ -4486,6 +4755,30 @@
       
     })().catch(e => (window.__ZA_SAFE_ERR ? window.__ZA_SAFE_ERR(e) : console.error(e)));
      
+  </script>
+  <script>
+    // ===== ZA DEBUG KILL SWITCH =====
+    window.ZA_GUARDS_OFF = true; // ← 디버그 끝나면 false로!
+
+    // 이름이 "가드스러운" 함수들을 전부 true로 바꿔치기 (있을 때만 패치)
+    (function patchGuards() {
+      if (!window.ZA_GUARDS_OFF) return;
+      const candidates = [
+        'requireLogin','isLoggedIn','ensureLogin','isAdmin','ensureAdmin',
+        'canPlacePin','isCooldownOk','hasTrust','withinBounds','isZoomOk',
+        'isLayerEnabled','antiSpamOk','notDuplicated','rateLimitOk'
+      ];
+      candidates.forEach(fn => {
+        if (typeof window[fn] === 'function') {
+          const orig = window[fn];
+          window[fn] = (...args) => {
+            console.info('[GUARDS_OFF]', fn, '→ true');
+            return true;
+          };
+          window[fn].__orig = orig; // 복구용 저장
+        }
+      });
+    })();
   </script>
 </body>
 </html>
