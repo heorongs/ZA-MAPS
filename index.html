@@ -51,8 +51,6 @@
     }
     .flt.on{background:#3d6cff; border-color:#3d6cff; color:#fff}
     .flt .progress{position:absolute; bottom:2px; left:50%; transform:translateX(-50%); font-size:10px; opacity:.8}
-    /* [DISABLE] 카테고리 칩 진행도 숫자 숨김 */
-    .flt .progress{ display:none !important; }
     .hr{height:1px; background:#2a3040; margin:12px 0}
     .inp{width:100%; box-sizing:border-box; background:#1117; color:#eef; border:1px solid #303645; border-radius:10px; padding:8px}
     .row{display:flex; gap:8px; align-items:center}
@@ -759,155 +757,6 @@
   <script src="za-safe-patch.js" defer></script>
   <script type="module">
   
-  // ====== [PIN SAVE WIRED] 등록 버튼 동작 ======
-  const $saveBtn = document.getElementById('saveBtn');
-  const $cancelBtn = document.getElementById('cancelBtn');
-  const $mTitle = document.getElementById('mTitle');
-  const $mBody  = document.getElementById('mBody');
-  const $mCat   = document.getElementById('mCat');
-  const $mImgs  = document.getElementById('mImgs');
-  const $mVideo = document.getElementById('mVideo');
-
-  // 보조 에디터들
-  const $tmNumber   = document.getElementById('tmNumber');
-  const $tmName     = document.getElementById('tmName');
-  const $megaPokemon= document.getElementById('megaPokemon');
-  const $missionNumber = document.getElementById('missionNumber');
-  const $itemName   = document.getElementById('itemName');
-  const $pkChips    = document.getElementById('pkChips');
-
-  function getPkList(){
-    // pkChips 내부의 .tag 요소 텍스트를 배열로 수집
-    return [...($pkChips?.querySelectorAll('.tag')||[])].map(el=> (el.textContent||'').trim()).filter(Boolean);
-  }
-
-  async function collectUploads(markerId){
-    if (!firebaseOk) return { media: [] };
-    const media = [];
-
-    // 이미지들
-    if ($mImgs?.files?.length){
-      for (const f of $mImgs.files){
-        const url = await uploadSmart(f, 'marker_images', (t)=>($saveBtn.textContent=t), '이미지 업로드');
-        media.push({ type:'image', url });
-      }
-    }
-    // 비디오 1개
-    if ($mVideo?.files?.length){
-      const f = $mVideo.files[0];
-      const url = await uploadSmart(f, 'marker_videos', (t)=>($saveBtn.textContent=t), '동영상 업로드');
-      media.push({ type:'video', url });
-    }
-    return { media };
-  }
-
-  function resetPinForm(){
-    $mTitle.value = '';
-    $mBody.value  = '';
-    $mCat.value   = CATEGORIES[0]?.key || '';
-    $mImgs.value  = '';
-    $mVideo.value = '';
-    if ($tmNumber) $tmNumber.value='';
-    if ($tmName) $tmName.value='';
-    if ($megaPokemon) $megaPokemon.value='';
-    if ($missionNumber) $missionNumber.value='';
-    if ($itemName) $itemName.value='';
-    if ($pkChips) $pkChips.innerHTML='';
-    updateEditorsForCategory($mCat.value);
-  }
-
-  async function savePin(){
-    if ($saveBtn.disabled) return;
-    try{
-      if (!firebaseOk){ alert('네트워크 차단으로 저장 불가'); return; }
-      if (!me){ alert('로그인이 필요합니다'); return; }
-
-      const title = ($mTitle.value||'').trim();
-      const body  = ($mBody.value||'').trim();
-      let catKey  = resolveCatKey($mCat.value||'');
-      if (!title){ alert('제목을 입력하세요'); return; }
-      if (!catKey){ alert('카테고리를 선택하세요'); return; }
-
-      // 지도 클릭 좌표(필수)
-      const ll = globalThis._lastClickLatLng;
-      if (!ll || isNaN(+ll.lat) || isNaN(+ll.lng)){
-        alert('지도를 클릭해 위치를 선택한 뒤 등록하세요');
-        return;
-      }
-
-      // 카테고리별 부가필드
-      const extra = {};
-      if (catKey === TM_CAT){
-        extra.tm = { number: ($tmNumber?.value||'').trim(), name: ($tmName?.value||'').trim() };
-      }
-      if (catKey === MEGA_STONE_CAT){
-        extra.megaPokemon = ($megaPokemon?.value||'').trim();
-      }
-      if (MISSION_CATS.includes(catKey)){
-        extra.missionNumber = ($missionNumber?.value||'').trim();
-      }
-      if (ITEM_CATS.includes(catKey)){
-        extra.itemName = ($itemName?.value||'').trim();
-      }
-      if (POKEMON_CATS.includes(catKey)){
-        const list = getPkList();
-        if (list.length) extra.pokemon = list;
-      }
-
-      // 기본 문서
-      const base = {
-        title, body,
-        category: catKey,
-        x: +ll.lng, y: +ll.lat,                // Leaflet 좌표계: (lng=x, lat=y)
-        status: isAdmin ? 'approved' : 'pending',
-        authorUid: me.uid,
-        createdAt: serverTimestamp(),
-        viewCount: 0,
-        reportPendingCount: 0,
-        hiddenUntil: null,
-        ...extra
-      };
-
-      // 중복 클릭 방지
-      $saveBtn.disabled = true;
-      $saveBtn.textContent = '등록 중…';
-
-      // 1) 미디어 업로드
-      const up = await collectUploads();
-      if (up.media?.length) base.media = up.media;
-
-      // 2) 저장
-      const refDoc = await addDoc(collection(db,'markers'), base);
-
-      // 3) 랭크/XP/신뢰도/프로필 카운터
-      await awardXP('pin');
-      await addTrust(me.uid, +10, '핀 등록');
-      await safeMergeDoc(['profiles', me.uid], { pinsCreated: increment(1) });
-      await checkAchievements(me.uid);
-
-      // 4) UI 후처리
-      closePinModal();
-      resetPinForm();
-
-      // 5) 바로 상세 열어주기 (가시성 반영 후)
-      const newId = refDoc.id;
-      // 목록 구독 콜백에서 렌더되면 자동 표시됨. 약간의 딜레이 후 열기 시도.
-      setTimeout(()=> {
-        const rec = markerMap.get(newId);
-        if (rec) openInfoWithSeq(rec.data);
-      }, 500);
-    } catch(e){
-      alert('등록 실패: ' + (e?.message||e));
-    } finally{
-      $saveBtn.disabled = false;
-      $saveBtn.textContent = '등록';
-    }
-  }
-
-  $saveBtn?.addEventListener('click', savePin);
-  $cancelBtn?.addEventListener('click', ()=> closePinModal());
-
-
   // Firebase handles (single source of truth)
   let firebaseOk = false;
   let app, auth, db, st; // storage까지 한 번에
@@ -1069,12 +918,10 @@
     $sgEditCancel.onclick = ()=>{ $sgModal.style.display='none'; };
     // 저장 시 중복 등록 방지 + 저장 후 모달 닫기 (버그④ fix)
     $sgEditSave.onclick = async ()=>{
-      if (!firebaseOk) { alert('네트워크/파이어베이스 연결이 필요합니다.'); return; }
-      if (!me) { alert('로그인이 필요합니다. 상단의 Google 로그인 버튼을 사용하세요.'); return; }
+      if (!firebaseOk || !me) { alert('로그인이 필요합니다'); return; }
       const t = ($sgEditTitle.value||'').trim();
       const b = ($sgEditBody.value||'').trim();
-      if (!t) { alert('제목을 입력하세요.'); return; }
-      if (!b) { alert('내용을 입력하세요.'); return; }
+      if (!t || !b) { alert('제목/내용을 입력하세요'); return; }
       try{
         $sgEditSave.disabled = true; $sgEditSave.textContent = '등록중...';
         await addDoc(collection(db,'suggestions'), {
@@ -2574,144 +2421,6 @@
         }
       };
     }
-
-    // [NEW] --- Pin Save wiring ---
-    const $saveBtn   = document.getElementById('saveBtn');
-    const $cancelBtn = document.getElementById('cancelBtn');
-
-    $cancelBtn.onclick = () => { 
-      if ($modal) { $modal.style.display = 'none'; $modal.dataset.openReason=''; }
-    };
-
-    // 폼 필드 참조
-    const $mTitle = document.getElementById('mTitle');
-    const $mBody  = document.getElementById('mBody');
-    const $mCat   = document.getElementById('mCat');
-    const $mImgs  = document.getElementById('mImgs');
-    const $mVideo = document.getElementById('mVideo');
-
-    // 선택 편집기(없으면 안전하게 처리)
-    const $tmNumber = document.getElementById('tmNumber');
-    const $tmName   = document.getElementById('tmName');
-    const $megaPokemon   = document.getElementById('megaPokemon');
-    const $missionNumber = document.getElementById('missionNumber');
-    const $itemName      = document.getElementById('itemName');
-    const $pkChips       = document.getElementById('pkChips');
-
-    function collectPokemon() {
-      // 칩이 있으면 칩에서, 없으면 빈 배열
-      if (!$pkChips) return [];
-      const names = [];
-      [...$pkChips.querySelectorAll('.tag')].forEach(el=>{
-        const t = (el.textContent||'').trim();
-        if (t) names.push(t);
-      });
-      return names;
-    }
-
-    async function uploadMedias() {
-      const media = [];
-      // 이미지들
-      if ($mImgs?.files?.length) {
-        for (const f of $mImgs.files) {
-          const url = await uploadSmart(f, 'marker_images', (p)=>{ $saveBtn.textContent = p; }, '이미지 업로드');
-          media.push({type:'image', url});
-        }
-      }
-      // 비디오 1개 권장
-      if ($mVideo?.files?.length) {
-        const v = $mVideo.files[0];
-        const url = await uploadSmart(v, 'marker_videos', (p)=>{ $saveBtn.textContent = p; }, '동영상 업로드');
-        media.push({type:'video', url});
-      }
-      return media;
-    }
-
-    $saveBtn.onclick = async ()=>{
-      try {
-        if (!firebaseOk) { alert('네트워크/파이어베이스 연결이 필요합니다.'); return; }
-        if (!me) { alert('로그인이 필요합니다. 상단의 Google 로그인 버튼을 사용하세요.'); return; }
-        const latlng = globalThis._lastClickLatLng;
-        if (!latlng || typeof latlng.lat!=='number' || typeof latlng.lng!=='number') {
-          alert('지도에서 위치를 먼저 선택해 주세요. (핀 배치 모드에서 지도 클릭)');
-          return;
-        }
-        const title = ($mTitle?.value||'').trim();
-        const body  = ($mBody?.value||'').trim();
-        const category = ($mCat?.value||'').trim();
-        if (!title || !category) { alert('제목과 카테고리를 입력해 주세요.'); return; }
-
-        // 중복 클릭 방지
-        $saveBtn.disabled = true;
-        const prevLabel = $saveBtn.textContent;
-        $saveBtn.textContent = '업로드 준비...';
-
-        // 미디어 업로드
-        const media = await uploadMedias();
-
-        // 부가 필드(선택)
-        const extra = {};
-        if ($tmNumber && $tmName && category === '기타-기술머신') {
-          extra.tm = { number: ($tmNumber.value||'').trim(), name: ($tmName.value||'').trim() };
-        }
-        if ($megaPokemon && category === '아이템-메가스톤') {
-          extra.megaPokemon = ($megaPokemon.value||'').trim();
-        }
-        if ($missionNumber && (category === '임무-메인 임무' || category === '임무-사이드 임무')) {
-          extra.missionNumber = ($missionNumber.value||'').trim();
-        }
-        if ($itemName && ['아이템-중요 아이템','아이템-포켓몬 볼','아이템-회복 아이템','아이템-보물','아이템-기타 아이템'].includes(category)) {
-          extra.itemName = ($itemName.value||'').trim();
-        }
-
-        const pokemon = collectPokemon();
-        const pokemonNorm = pokemon.map(s => (s||'').trim().toLowerCase());
-
-        // Firestore 등록 (검수 대기)
-        $saveBtn.textContent = '등록 중...';
-        const docRef = await addDoc(collection(db,'markers'), {
-          title,
-          body,
-          category,
-          x: +latlng.lng, // 기존 코드에서 x=lng, y=lat 사용
-          y: +latlng.lat,
-          media,                // [{type,url}...]
-          pokemon, pokemonNorm, // 선택
-          status: 'pending',    // 일반 유저는 검수대기
-          authorUid: me.uid,
-          createdAt: serverTimestamp(),
-          viewCount: 0,
-          reportPendingCount: 0,
-          hiddenUntil: null,
-          ...extra
-        });
-
-        // 유저 프로필 통계/XP/신뢰도
-        await safeMergeDoc(['profiles', me.uid], {
-          pinsCreated: increment(1),
-          trust: increment(10) // 핀 등록 +10
-        });
-        await awardXP('pin');  // +100 XP 기본
-
-        // 폼 리셋 & 닫기
-        $mTitle.value=''; $mBody.value=''; $mCat.value=category; 
-        if ($mImgs) $mImgs.value = ''; if ($mVideo) $mVideo.value = '';
-        if ($modal) { $modal.style.display='none'; $modal.dataset.openReason=''; }
-        pinModalArmed = false;
-
-        alert('등록 완료! 검수 대기 목록에 들어갔습니다.');
-        // 새로 반영
-        subscribeMarkers();
-
-      } catch (e) {
-        console.error(e);
-        alert('등록 실패: ' + (e?.message || e));
-      } finally {
-        $saveBtn.disabled = false;
-        $saveBtn.textContent = '등록';
-      }
-    };
-
 
     /* ---------------- 마커 구독/렌더 + 조회수 ---------------- */
     const markerMap=new Map();
@@ -5073,4 +4782,3 @@
   </script>
 </body>
 </html>
-
